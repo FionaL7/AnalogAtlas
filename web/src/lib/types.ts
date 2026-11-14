@@ -67,6 +67,18 @@ export interface TwinsResponse {
   breakdown: BreakdownRow[];
 }
 
+/** Static export: tiles/{body}.json (§4.2). One cell of the map grid. */
+export interface TileCell {
+  tile_id: string;
+  lat: number;
+  lon: number;
+  /** [lon_min, lat_min, lon_max, lat_max] */
+  bbox: [number, number, number, number];
+  slope_med: number | null;
+  relief_km: number | null;
+  known_analog?: string | null;
+}
+
 /** Static export: sites.json (§4.2). */
 export interface Site {
   id: string;

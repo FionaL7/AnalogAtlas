@@ -12,6 +12,7 @@ import type {
   SearchRequest,
   SearchResponse,
   Site,
+  TileCell,
   TwinsResponse,
 } from "./types";
 
@@ -82,6 +83,14 @@ export async function twins(
   if (!isLive()) return mockTwins(srcTileId, earthTileId);
   const q = new URLSearchParams({ src_tile_id: srcTileId, earth_tile_id: earthTileId });
   return request<TwinsResponse>(`/twins?${q}`);
+}
+
+/**
+ * The full tile grid for one body, for the map's background layer. Static
+ * export only (03_export.py); until it has run there is no grid, just results.
+ */
+export async function tiles(body: "moon" | "earth"): Promise<TileCell[]> {
+  return (await fromStatic<TileCell[]>(`/data/tiles/${body}.json`)) ?? [];
 }
 
 /**

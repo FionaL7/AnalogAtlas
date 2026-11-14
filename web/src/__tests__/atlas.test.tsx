@@ -4,9 +4,20 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import App from "../App";
+import type { MapPaneProps } from "../components/map/MapPane";
+
+// jsdom has no canvas, so Leaflet itself can't run here. Stub the lazily
+// loaded map with its props visible; the real map is checked in a browser.
+vi.mock("../components/map/LeafletMap", () => ({
+  default: ({ body, markers }: MapPaneProps) => (
+    <div role="region" aria-label={`${body === "moon" ? "Moon" : "Earth"} map`}>
+      {markers.length} markers
+    </div>
+  ),
+}));
 
 const renderApp = () =>
   render(
@@ -25,6 +36,10 @@ describe("Atlas", () => {
 
     await waitFor(() => expect(screen.getByText(/12 candidates/)).toBeInTheDocument());
     expect(screen.getAllByText("new").length).toBeGreaterThan(0);
+
+    // Two panes: the Moon site as the source, its Earth analogs on the other map.
+    expect(await screen.findByRole("region", { name: "Moon map" })).toHaveTextContent("1 markers");
+    expect(screen.getByRole("region", { name: "Earth map" })).toHaveTextContent("12 markers");
 
     const first = screen.getByRole("button", { name: /77\.50°S/ });
     await user.click(first);

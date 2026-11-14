@@ -33,7 +33,7 @@ flowchart LR
 
     subgraph SERVE["Served"]
         API["api/ — FastAPI, container host<br/>wraps analogatlas/analog.py<br/>/search /analogs /twins"]
-        WEB["web/ — React, static<br/>MapLibre panes, report cards,<br/>field guides"]
+        WEB["web/ — React, static<br/>Leaflet panes, report cards,<br/>field guides"]
     end
 
     MOON --> S1
@@ -74,8 +74,8 @@ This directly answers a requirement: [REQUIREMENTS.md](REQUIREMENTS.md#4-things-
 | Frontend | **React + TypeScript (strict)**, Vite | Decided in [PLAN.md](PLAN.md#decisions). Vite over Next.js: we have no SSR need — the export is static JSON and the map is client-only |
 | Styling / UI | **Tailwind CSS + shadcn/ui** (Radix primitives), **lucide-react** icons | Accessible components that live in our repo and are customizable; no design system to invent under time pressure |
 | Theme | Dark-first, light toggle | Planetary imagery reads best on dark |
-| Map engine | **MapLibre GL JS** via `react-map-gl/maplibre` | Open source, raster + vector, and GPU fill layers handle our ~17k tile polygons smoothly. Two instances: one per body |
-| Score layer | MapLibre GeoJSON source + `fill` layer, color from a data-driven expression | ~17k rectangles is small. **deck.gl is not justified at this scale** — it was sized for 600k H3 hexes, which we don't have |
+| Map engine | **Leaflet** via `react-leaflet`, CRS EPSG:4326 | Decided in #24. NASA Trek (Moon) and our GIBS requests (Earth) are plain lat/lon tiles; Leaflet renders that CRS natively and its zoom-0 grid (2×1 tiles) is exactly Trek's. MapLibre only supports Web Mercator or globe. Two instances: one per body, loaded lazily |
+| Score layer | Leaflet canvas renderer: the full tile grid as faint outlines, ranked results as circle markers coloured by a viridis-like ramp, with a legend | ~17k rectangles is small for one canvas. **deck.gl is not justified at this scale** |
 | Earth basemap | **NASA GIBS** WMS/WMTS (Blue Marble, ASTER hillshade) | Already our tile source ([`config.py`](../analogatlas/config.py)); NASA's own imagery, which judges notice |
 | Moon basemap | **NASA Moon Trek** WMTS (LROC WAC, LOLA hillshade) | Same layers the index is built from, so the map and the scores agree |
 | Charts | **Recharts** (via shadcn/ui charts): radar + horizontal bars | Report card is a radar (per-dimension match) plus bars; matches the UI system |
@@ -324,5 +324,5 @@ data/              gitignored: raw/ tiles/ index/
 
 - **South pole (core vs. stretch, see [PLAN.md](PLAN.md#open-decisions)):** the Moon index above is cylindrical, ±60°. If the pole becomes core it adds a separate `moon_polar_*` file set on a polar-stereographic grid — *not* a reprojection of the existing one — plus a second lunar map pane with its own projection and `"moon_polar"` as a `body` value. Everything above is additive under that change; nothing needs rewriting.
 - **How much Mars:** `sites.json` and the `body` field already allow Mars presets; a Mars index would follow the Moon's file pattern exactly.
-- **Map library:** MapLibre is the recommendation above (GPU fill layers, globe projection, one instance per body). Leaflet is the fallback if Trek's EPSG:4326 tiles fight MapLibre; the polar pane needs a projection plugin either way.
+- **Map library: decided, Leaflet** (#24). The polar pane, if the pole becomes core, adds proj4leaflet for Trek's polar stereographic tiles.
 - **Hosting: decided** ([PLAN.md](PLAN.md#decisions)). Google Cloud on Fiona's Earth Engine project, with the API on Cloud Run. Frontend host and CD pipeline get settled when deploying (#21).
