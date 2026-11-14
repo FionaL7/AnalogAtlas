@@ -132,6 +132,31 @@ def test_twins_report_card(client, index_dir):
         assert row["match"] is None or 0.0 <= row["match"] <= 1.0
 
 
+def test_twins_earths_limits_are_complete_and_explicit(client, index_dir):
+    """Issue #20: the 'Earth cannot reproduce' group is fixed, complete, and
+    marked by `kind`, not inferred from a score of 0."""
+    from analogatlas.analog import EARTH_LIMITS
+
+    out = client.get("/twins", params={
+        "src_tile_id": index_dir.meta["moon"].tile_id.iloc[0],
+        "earth_tile_id": index_dir.meta["earth"].tile_id.iloc[0]}).json()
+    rows = {row["dimension"]: row for row in out["breakdown"]}
+
+    limits = [r for r in out["breakdown"] if r["kind"] == "earth_limit"]
+    assert [r["dimension"] for r in limits] == [lim["dimension"] for lim in EARTH_LIMITS]
+    assert {"Atmosphere", "Gravity", "Radiation", "Magnetic field",
+            "Day/night cycle", "Regolith dust"} <= set(rows)
+    assert all(r["match"] == 0.0 for r in limits)
+    assert rows["Surface rock cover"]["kind"] == "no_equivalent"
+    assert rows["Median slope"]["kind"] == "compare"
+
+    assert {r["kind"] for r in out["breakdown"]} <= {"compare", "no_equivalent", "earth_limit"}
+
+    # Lunar temperatures are modelled and must say so (ARCHITECTURE.md §6).
+    for dim in ("Surface temperature swing", "Coldest surface"):
+        assert "not measured" in rows[dim]["note"]
+
+
 def test_twins_survives_nasa_power_being_down(client, index_dir, monkeypatch):
     import requests
 
@@ -206,6 +231,6 @@ def test_row_order_mismatch_is_refused_at_startup(tmp_path, monkeypatch, stub_cl
     monkeypatch.setattr(C, "INDEX", d)
     from api import main as api_main
 
-    with pytest.raises(RuntimeError, match="inconsistent"):
+    with pytest.raises(RuntimeError, match="rows differ"):
         with TestClient(api_main.create_app()):
             pass

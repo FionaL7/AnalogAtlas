@@ -37,8 +37,28 @@ describe("verdict", () => {
 describe("groupBreakdown", () => {
   const groups = groupBreakdown(mockTwins("moon_6_0_90", "earth_-77.50_+162.00").breakdown);
 
-  it("puts atmosphere and gravity in their own can't-reproduce group", () => {
-    expect(groups["cannot-reproduce"].map((r) => r.dimension)).toEqual(["Atmosphere", "Gravity"]);
+  it("puts every Earth's-limits row in its own can't-reproduce group", () => {
+    expect(groups["cannot-reproduce"].map((r) => r.dimension)).toEqual([
+      "Atmosphere", "Gravity", "Radiation", "Magnetic field", "Day/night cycle", "Regolith dust",
+    ]);
+  });
+
+  it("groups by kind, so a real 0% comparison is a breakdown, not an Earth limit", () => {
+    const g = groupBreakdown([
+      { dimension: "Dryness", moon: "-", earth: "-", match: 0, note: "", kind: "compare" },
+      { dimension: "Gravity", moon: "-", earth: "-", match: 0, note: "", kind: "earth_limit" },
+    ]);
+    expect(g.breaks.map((r) => r.dimension)).toEqual(["Dryness"]);
+    expect(g["cannot-reproduce"].map((r) => r.dimension)).toEqual(["Gravity"]);
+  });
+
+  it("still groups rows from an older API that sends no kind", () => {
+    const g = groupBreakdown([
+      { dimension: "Atmosphere", moon: "-", earth: "-", match: 0, note: "" },
+      { dimension: "Rock cover", moon: "-", earth: "-", match: null, note: "" },
+    ]);
+    expect(g["cannot-reproduce"].map((r) => r.dimension)).toEqual(["Atmosphere"]);
+    expect(g["no-equivalent"].map((r) => r.dimension)).toEqual(["Rock cover"]);
   });
 
   it("keeps a null-match dimension out of both holds and breaks", () => {

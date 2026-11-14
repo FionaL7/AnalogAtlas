@@ -8,6 +8,9 @@ breaks down*, which the challenge asks for explicitly.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
 import math
 from dataclasses import dataclass
 from functools import lru_cache
@@ -18,6 +21,8 @@ import requests
 
 from . import config as C
 from .sites import KNOWN_EARTH_ANALOGS
+
+log = logging.getLogger("analogatlas")
 
 
 # ------------------------------------------------------------- index -------
@@ -32,10 +37,47 @@ class BodyIndex:
         return int(np.argmin(d))
 
 
+class IndexMismatchError(RuntimeError):
+    """The meta rows and the embedding rows no longer line up."""
+
+
+def tile_order_digest(tile_ids) -> str:
+    """SHA-256 over the tile_id sequence: changes if any row moves."""
+    return hashlib.sha256("\n".join(map(str, tile_ids)).encode()).hexdigest()
+
+
+def write_order_stamp(body: str, meta: pd.DataFrame, directory=None) -> None:
+    """Record the row order the embeddings were written in (02_features.py).
+
+    `{body}_order.json` sits next to the index. load_index() re-checks it, so a
+    re-sorted or re-written `_meta.parquet` can't silently pair rows with the
+    wrong embeddings (ARCHITECTURE.md §7).
+    """
+    directory = directory or C.INDEX
+    stamp = {"rows": int(len(meta)), "tile_id_sha256": tile_order_digest(meta.tile_id)}
+    (directory / f"{body}_order.json").write_text(json.dumps(stamp, indent=2))
+
+
 def load_index(body: str) -> BodyIndex:
     meta = pd.read_parquet(C.INDEX / f"{body}_meta.parquet")
     shade = np.load(C.INDEX / f"{body}_shade.npy").astype(np.float32)
     img = np.load(C.INDEX / f"{body}_img.npy").astype(np.float32)
+
+    if not len(meta) == len(shade) == len(img):
+        raise IndexMismatchError(
+            f"{body} index rows differ: meta={len(meta)} shade={len(shade)} img={len(img)}")
+
+    stamp_path = C.INDEX / f"{body}_order.json"
+    if stamp_path.exists():
+        stamp = json.loads(stamp_path.read_text())
+        if stamp["rows"] != len(meta) or stamp["tile_id_sha256"] != tile_order_digest(meta.tile_id):
+            raise IndexMismatchError(
+                f"{body}_meta.parquet row order changed since the embeddings were written; "
+                f"rebuild with scripts/02_features.py {body}")
+    else:
+        # Indexes built before the stamp existed: lengths are checked, order can't be.
+        log.warning("%s has no %s; row order not verified. Rebuild with "
+                    "scripts/02_features.py %s to add it.", body, stamp_path.name, body)
     return BodyIndex(meta, shade, img)
 
 
@@ -115,14 +157,44 @@ def earth_climate(lat: float, lon: float) -> dict:
 
 
 # -------------------------------------------------------- breakdown --------
+# Every report-card row has a `kind`:
+#   compare        measured on both bodies; match is 0-1
+#   no_equivalent  measured on the Moon only; match is None
+#   earth_limit    no place on Earth can reproduce it; match is always 0
+# The UI groups by `kind`, never by guessing from the score (issue #20).
+MODELLED = "modelled from latitude, not measured"
+
+# Fixed rows: what Earth cannot reproduce, whichever tile is chosen. The brief
+# calls recognising these "part of good scientific analysis".
+EARTH_LIMITS = [
+    dict(dimension="Atmosphere", moon="vacuum (trace exosphere)", earth="1 bar at sea level",
+         note="No air: no convective cooling and no wind. Dust, thermal and EVA tests behave differently"),
+    dict(dimension="Gravity", moon="1.62 m/s² (1/6 g)", earth="9.81 m/s²",
+         note="Mobility and construction tests overestimate traction and load"),
+    dict(dimension="Radiation", moon="~1.4 mSv/day at the surface (Chang'e-4)",
+         earth="~0.007 mSv/day natural background",
+         note="No atmosphere or global magnetic field to shield cosmic rays and solar particle events"),
+    dict(dimension="Magnetic field", moon="no global field (local crustal anomalies)",
+         earth="global magnetosphere",
+         note="Earth's field deflects the solar wind; on the Moon it reaches the surface"),
+    dict(dimension="Day/night cycle", moon="~29.5 Earth days (~2 weeks light, ~2 weeks dark)",
+         earth="24 hours",
+         note="Long nights drive power and thermal design; some polar peaks are lit almost continuously"),
+    dict(dimension="Regolith dust", moon="sharp, unweathered, electrostatically charged",
+         earth="rounded by wind and water",
+         note="Earth dust is a poor stand-in for lunar abrasion, adhesion and seal wear"),
+]
+
+
 def breakdown(moon: pd.Series, earth: pd.Series, climate: dict | None) -> pd.DataFrame:
     """Dimension-by-dimension comparison of a lunar tile and an Earth tile.
-    Returns rows of (dimension, moon value, earth value, match 0-1, note)."""
+    Returns rows of (dimension, moon value, earth value, match 0-1, note, kind)."""
     rows = []
 
-    def add(dim, mv, ev, match, note):
+    def add(dim, mv, ev, match, note, kind="compare"):
         rows.append(dict(dimension=dim, moon=mv, earth=ev,
-                         match=None if match is None else float(np.clip(match, 0, 1)), note=note))
+                         match=None if match is None else float(np.clip(match, 0, 1)),
+                         note=note, kind=kind))
 
     add("Terrain shape (ML)", "-", "-", earth.get("visual_cos_scaled"),
         "CLIP similarity of hillshade tiles, sun-direction invariant")
@@ -136,9 +208,10 @@ def breakdown(moon: pd.Series, earth: pd.Series, climate: dict | None) -> pd.Dat
         ts_min, ts_max = climate["TS_MIN"], climate["TS_MAX"]
         swing_e, swing_m = ts_max - ts_min, moon.t_max_k - moon.t_min_k
         add("Surface temperature swing", f"{swing_m:.0f} K", f"{swing_e:.0f} K",
-            swing_e / swing_m, "Moon: Diviner-consistent model; Earth: NASA POWER skin temp.")
+            swing_e / swing_m, f"Moon: {MODELLED}. Earth: NASA POWER skin temperature")
         add("Coldest surface", f"{moon.t_min_k - 273.15:.0f} °C", f"{ts_min:.0f} °C",
-            math.exp(-abs((ts_min + 273.15) - moon.t_min_k) / 60), "")
+            math.exp(-abs((ts_min + 273.15) - moon.t_min_k) / 60),
+            f"Moon: {MODELLED}. Earth: NASA POWER skin temperature")
         precip = climate["PRECTOTCORR"]
         add("Dryness", "no liquid water", f"{precip:.2f} mm/day", math.exp(-precip / 0.5),
             "NASA POWER precipitation; hyper-arid < 0.1 mm/day")
@@ -146,8 +219,7 @@ def breakdown(moon: pd.Series, earth: pd.Series, climate: dict | None) -> pd.Dat
             climate["ALLSKY_SFC_SW_DWN"] / 8.0, "Higher = closer to airless illumination")
     if "rock_abundance" in moon and not pd.isna(moon.rock_abundance):
         add("Surface rock cover", f"{moon.rock_abundance * 100:.1f}%", "no global Earth equivalent",
-            None, "Diviner rock abundance - landing-hazard proxy")
-    add("Atmosphere", "vacuum", "1 bar (less at altitude)", 0.0,
-        "Cannot be reproduced on Earth - dust, thermal and EVA tests differ")
-    add("Gravity", "1.62 m/s²", "9.81 m/s²", 0.0, "Mobility & construction tests overestimate traction")
+            None, "Diviner rock abundance - landing-hazard proxy", kind="no_equivalent")
+    for lim in EARTH_LIMITS:
+        add(lim["dimension"], lim["moon"], lim["earth"], 0.0, lim["note"], kind="earth_limit")
     return pd.DataFrame(rows)

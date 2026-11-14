@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 
 from analogatlas import config as C
+from analogatlas.analog import write_order_stamp
 
 DIM = 512
 MOON_TILES = 48
@@ -74,6 +75,7 @@ def write_index(directory, bodies=("moon", "earth"), seed: int = 7) -> dict[str,
         meta.to_parquet(directory / f"{body}_meta.parquet")
         np.save(directory / f"{body}_shade.npy", _unit(rng, len(meta)))
         np.save(directory / f"{body}_img.npy", _unit(rng, len(meta)))
+        write_order_stamp(body, meta, directory)
         out[body] = meta
     return out
 

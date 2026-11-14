@@ -109,6 +109,11 @@ def test_dimensions_are_derived_from_breakdown(exported):
     assert by_id["surface-rock-cover"]["no_earth_equivalent"] is True
     assert by_id["median-slope"]["earth_cannot_reproduce"] is False
     assert by_id["median-slope"]["note"]
+    # #20: every Earth's-limits row is marked by kind, not inferred from match.
+    limits = {d["label"] for d in dims if d["kind"] == "earth_limit"}
+    assert limits == {"Atmosphere", "Gravity", "Radiation", "Magnetic field",
+                      "Day/night cycle", "Regolith dust"}
+    assert all(d["earth_cannot_reproduce"] == (d["kind"] == "earth_limit") for d in dims)
 
 
 def test_report_cards_are_complete_and_json_safe(exported):
@@ -125,6 +130,7 @@ def test_report_cards_are_complete_and_json_safe(exported):
         for row in card["breakdown"]:
             assert row["match"] is None or 0.0 <= row["match"] <= 1.0
             assert row["id"]
+            assert row["kind"] in ("compare", "no_equivalent", "earth_limit")
 
 
 def test_report_cards_lead_with_new_candidates(exported):

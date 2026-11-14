@@ -56,6 +56,8 @@ export interface BreakdownRow {
   /** 0-1, or null when Earth has no equivalent at all. */
   match: number | null;
   note: string;
+  /** How to group the row. `earth_limit` = Earth cannot reproduce this (always match 0). */
+  kind?: "compare" | "no_equivalent" | "earth_limit";
 }
 
 export interface TwinsResponse {

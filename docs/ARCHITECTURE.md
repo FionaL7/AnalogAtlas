@@ -170,6 +170,8 @@ sequenceDiagram
 
 Row order in the two `.npy` files matches `_meta.parquet` exactly. Nothing re-sorts them; `analog.BodyIndex` relies on this.
 
+`{body}_order.json` (written by `scripts/02_features.py`) records the row count and a SHA-256 of the `tile_id` order. `load_index` refuses to load if the row counts differ or the order changed (`IndexMismatchError`). Older indexes without the file still load, with a warning.
+
 **Feature columns in `_meta.parquet`:**
 
 | Column | Bodies | Source | Meaning |
@@ -236,12 +238,23 @@ Slope and relief are comparable across bodies **by construction**: LOLA LDEM_16 
  "climate": {"TS_MIN": -55.2, "TS_MAX": 8.1, "PRECTOTCORR": 0.02, "ALLSKY_SFC_SW_DWN": 3.1},
  "breakdown": [
    {"dimension": "Median slope", "moon": "4.7°", "earth": "5.1°", "match": 0.91,
+<<<<<<< Updated upstream
     "note": "LOLA vs Copernicus DEM, both ~1.9 km/px"},
    {"dimension": "Atmosphere", "moon": "vacuum", "earth": "1 bar", "match": 0.0,
     "note": "Cannot be reproduced on Earth"}
+=======
+    "note": "LOLA vs ETOPO, both ~1.9 km/px", "kind": "compare"},
+   {"dimension": "Atmosphere", "moon": "vacuum (trace exosphere)", "earth": "1 bar at sea level",
+    "match": 0.0, "note": "No air: no convective cooling and no wind. ...", "kind": "earth_limit"}
+>>>>>>> Stashed changes
  ]}
 ```
-`breakdown` rows come straight from `analog.breakdown()`. `match` is `0..1` or `null` when there's no Earth equivalent (e.g. Diviner rock abundance). Rows with `match: 0.0` are the Earth's-limits rows and should render in their own "can't reproduce" group.
+`breakdown` rows come straight from `analog.breakdown()`. Each row has a `kind`:
+- `compare`: measured on both bodies; `match` is `0..1`.
+- `no_equivalent`: Moon only (e.g. Diviner rock abundance); `match` is `null`.
+- `earth_limit`: Earth cannot reproduce it; `match` is always `0`. The fixed rows: Atmosphere, Gravity, Radiation, Magnetic field, Day/night cycle, Regolith dust.
+
+**Group by `kind`, not by `match`.** A real comparison can score 0 without being an Earth limit. `scripts/03_export.py` derives `dimensions.json` from `breakdown()` and carries `kind` into it and the pre-computed report cards.
 
 **`GET /tile/{body}/{layer}/{tile_id}`** — tile image, `layer` ∈ `img | shade`. Passthrough to `data/tiles/` in local dev; in production the frontend points at object storage directly and the API doesn't serve images.
 

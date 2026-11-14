@@ -54,14 +54,9 @@ def load_all() -> dict[str, BodyIndex]:
         if not (C.INDEX / f"{body}_meta.parquet").exists():
             log.warning("no index for %s in %s - its endpoints will return 503", body, C.INDEX)
             continue
+        # load_index refuses a mismatched index (row counts, tile_id order stamp),
+        # so a silently misaligned index can never be served (issue #12).
         idx = load_index(body)
-        # Row order between the parquet and the two .npy files is the contract
-        # (ARCHITECTURE.md §4.1) and a silent mismatch produces wrong analogs,
-        # so refuse to serve it. Issue #12 moves this into load_index itself.
-        if not len(idx.meta) == len(idx.shade) == len(idx.img):
-            raise RuntimeError(
-                f"{body} index is inconsistent: meta={len(idx.meta)} "
-                f"shade={len(idx.shade)} img={len(idx.img)}")
         if body == "earth":
             idx.meta = annotate_known(idx.meta)
         elif "known_analog" not in idx.meta:

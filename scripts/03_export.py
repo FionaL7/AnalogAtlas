@@ -125,13 +125,13 @@ def build_dimensions(moon: analog.BodyIndex, earth: analog.BodyIndex,
     rows = analog.breakdown(moon_row, earth_row, climate)
     out = []
     for row in rows.itertuples():
-        match = None if pd.isna(row.match) else float(row.match)
         out.append(dict(
             id=slug(row.dimension), label=row.dimension, note=row.note,
-            # match == 0 is a fixed Earth's-limits row; None means nothing
-            # comparable was measured. The UI groups on exactly this.
-            earth_cannot_reproduce=match == 0.0,
-            no_earth_equivalent=match is None,
+            # breakdown() marks each row's kind (#20); group on it, never on
+            # match == 0, which a real comparison can also score.
+            kind=row.kind,
+            earth_cannot_reproduce=row.kind == "earth_limit",
+            no_earth_equivalent=row.kind == "no_equivalent",
         ))
     return out
 
@@ -216,7 +216,7 @@ def export_twins(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
             climate=None if climate is None else {k: clean(v, 3) for k, v in climate.items()},
             breakdown=[dict(dimension=r.dimension, id=slug(r.dimension),
                             moon=clean(r.moon), earth=clean(r.earth),
-                            match=clean(r.match, 4), note=r.note)
+                            match=clean(r.match, 4), note=r.note, kind=r.kind)
                        for r in rows.itertuples()],
         ))
         written.append(path.name)
@@ -238,12 +238,12 @@ def main() -> int:
         sys.exit(f"No index for {', '.join(missing)} in {C.INDEX}. "
                  "Build it first (scripts/01_tiles.py, scripts/02_features.py).")
 
-    moon, earth = analog.load_index("moon"), analog.load_index("earth")
+    # load_index checks row counts and the tile_id order stamp (#12)
+    try:
+        moon, earth = analog.load_index("moon"), analog.load_index("earth")
+    except analog.IndexMismatchError as e:
+        sys.exit(f"index is inconsistent: {e} - do not export it")
     earth.meta = annotate_known(earth.meta)
-    for body, idx in (("moon", moon), ("earth", earth)):
-        if not len(idx.meta) == len(idx.shade) == len(idx.img):
-            sys.exit(f"{body} index is inconsistent: meta={len(idx.meta)} "
-                     f"shade={len(idx.shade)} img={len(idx.img)} - do not export it")
     print(f"moon: {len(moon.meta)} tiles, earth: {len(earth.meta)} tiles")
 
     out: Path = args.out

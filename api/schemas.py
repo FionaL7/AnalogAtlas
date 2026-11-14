@@ -75,6 +75,8 @@ class BreakdownRow(BaseModel):
     earth: Any
     match: float | None = Field(None, description="0-1, or null when Earth has no equivalent")
     note: str = ""
+    kind: Literal["compare", "no_equivalent", "earth_limit"] = Field(
+        "compare", description="earth_limit rows are what Earth cannot reproduce; group by this")
 
 
 class TwinsResponse(BaseModel):

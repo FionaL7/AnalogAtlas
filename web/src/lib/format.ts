@@ -37,18 +37,24 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
 };
 
 /**
- * Report-card grouping. `cannot-reproduce` (match exactly 0) comes from the
- * fixed Earth's-limits rows in analog.breakdown(); `no-equivalent` (null) means
- * nothing comparable was measured, e.g. Diviner rock abundance.
+ * Report-card grouping. Python marks each row's `kind` (issue #20):
+ * `earth_limit` rows are the fixed Earth's-limits rows from analog.breakdown(),
+ * and `no_equivalent` means nothing comparable was measured (e.g. Diviner rock
+ * abundance). Rows without `kind` (older API) fall back to reading the match.
  */
+export function rowGroup(row: BreakdownRow): Group {
+  if (row.kind === "earth_limit") return "cannot-reproduce";
+  if (row.kind === "no_equivalent") return "no-equivalent";
+  const v = verdict(row.match);
+  if (row.kind === "compare" && v === "cannot-reproduce") return "breaks"; // a real 0% match
+  return v === "partial" || v === "breaks" ? "breaks" : v;
+}
+
 export function groupBreakdown(rows: BreakdownRow[]): Record<Group, BreakdownRow[]> {
   const out: Record<Group, BreakdownRow[]> = {
     holds: [], breaks: [], "cannot-reproduce": [], "no-equivalent": [],
   };
-  for (const row of rows) {
-    const v = verdict(row.match);
-    out[v === "partial" || v === "breaks" ? "breaks" : v].push(row);
-  }
+  for (const row of rows) out[rowGroup(row)].push(row);
   return out;
 }
 
