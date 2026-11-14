@@ -38,7 +38,6 @@ export function Atlas() {
 
   const site = sites.find((s) => s.id === siteId) ?? null;
   const srcBody: Body = site?.body ?? "moon";
-  const dstBody: Body = srcBody === "moon" ? "earth" : "moon";
 
   useEffect(() => {
     if (!site) return;
@@ -111,33 +110,37 @@ export function Atlas() {
           {site?.blurb && <p className="px-4 pb-4 text-sm text-muted">{site.blurb}</p>}
         </div>
 
+        {/* Earth is always the left pane and the Moon always the right one,
+            whichever direction the search runs. Which pane shows the picked
+            site and which shows the ranked candidates follows srcBody. */}
         <div className="grid gap-4 md:grid-cols-2">
-          {/* Source: the picked site on its own body */}
-          <div className="h-72 lg:h-[26rem]">
-            <MapPane
-              body={srcBody}
-              grid={grids[srcBody]}
-              markers={site ? [{
-                tile_id: analogs?.src_tile.tile_id ?? site.id,
-                lat: site.lat, lon: site.lon, label: site.name,
-              }] : []}
-              focus={site ? { lat: site.lat, lon: site.lon } : undefined}
-            />
-          </div>
-          {/* Analogs: ranked candidates on the other body, coloured by score */}
-          <div className="h-72 lg:h-[26rem]">
-            <MapPane
-              body={dstBody}
-              grid={grids[dstBody]}
-              markers={hits.map((h) => ({
-                tile_id: h.tile_id, lat: h.lat, lon: h.lon,
-                weight: h.visual_cos_scaled, isNew: h.known_analog === null,
-                label: h.known_analog ?? h.tile_id,
-              }))}
-              selected={tileId}
-              onSelect={(id) => update({ tile: id })}
-            />
-          </div>
+          {(["earth", "moon"] as Body[]).map((body) => (
+            <div key={body} className="h-72 lg:h-[26rem]">
+              {body === srcBody ? (
+                <MapPane
+                  body={body}
+                  grid={grids[body]}
+                  markers={site ? [{
+                    tile_id: analogs?.src_tile.tile_id ?? site.id,
+                    lat: site.lat, lon: site.lon, label: site.name,
+                  }] : []}
+                  focus={site ? { lat: site.lat, lon: site.lon } : undefined}
+                />
+              ) : (
+                <MapPane
+                  body={body}
+                  grid={grids[body]}
+                  markers={hits.map((h) => ({
+                    tile_id: h.tile_id, lat: h.lat, lon: h.lon,
+                    weight: h.visual_cos_scaled, isNew: h.known_analog === null,
+                    label: h.known_analog ?? h.tile_id,
+                  }))}
+                  selected={tileId}
+                  onSelect={(id) => update({ tile: id })}
+                />
+              )}
+            </div>
+          ))}
         </div>
 
         {card && (

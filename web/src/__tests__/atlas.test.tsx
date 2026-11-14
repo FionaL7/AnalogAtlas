@@ -41,6 +41,11 @@ describe("Atlas", () => {
     expect(await screen.findByRole("region", { name: "Moon map" })).toHaveTextContent("1 markers");
     expect(screen.getByRole("region", { name: "Earth map" })).toHaveTextContent("12 markers");
 
+    // Earth is always the left pane, the Moon always the right one, whichever
+    // body the search starts from.
+    expect(screen.getAllByRole("region").map((r) => r.getAttribute("aria-label")))
+      .toEqual(["Earth map", "Moon map"]);
+
     const first = screen.getByRole("button", { name: /77\.50°S/ });
     await user.click(first);
 
