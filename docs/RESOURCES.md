@@ -34,6 +34,19 @@ Accounts already registered: NASA Earthdata, Copernicus Data Space, JAXA G-Porta
 | ESA | [ESA Open Science Catalog](https://opensciencedata.esa.int/) | Catalog of open geoscience datasets, products, experiments and workflows | Not reviewed yet |
 | JAXA | [JAXA G-Portal](https://gportal.jaxa.jp/gpr/) | Earth observation products from JAXA missions, searchable by variable | ALOS PALSAR L-band radar (optional) |
 
+## Global Offers (optional free tools)
+
+Free tools for Space Apps participants: [Global Offers](https://www.spaceappschallenge.org/2026/global-offers/). Claim an offer from that page when we need it.
+
+| Offer | What it is | Might help with |
+| --- | --- | --- |
+| Microsoft Planetary Computer | Petabytes of open Earth data (Copernicus DEM, Sentinel, ASTER, ALOS) via a STAC API; no account needed | Alternative to Earth Engine for the Earth pipeline |
+| Google Cloud | $300 credit for 90 days | Earth Engine's Cloud project, data storage, hosting the API |
+| Microsoft Azure | $200 credit for 30 days | Hosting |
+| Free domain + 1 year of hosting (Porkbun) | A free non-premium domain with SSL | A public URL for the app |
+| Meteomatics Weather API | 1,000 queries a day of weather and climate data | Extra Earth climate data |
+| GitHub Copilot, Miro, Microsoft Teams | Coding assistant, whiteboard, chat and calls | Team tools |
+
 ## Datasets we use
 
 | Dataset | Body | Source | Used for | Status |
