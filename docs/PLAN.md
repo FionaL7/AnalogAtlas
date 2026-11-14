@@ -4,6 +4,7 @@ As of 14 Nov 2026. Related docs:
 - [BRIEF.md](BRIEF.md): the challenge text
 - [REQUIREMENTS.md](REQUIREMENTS.md): requirements and the submission checklist
 - [RESOURCES.md](RESOURCES.md): data sources
+- [ARCHITECTURE.md](ARCHITECTURE.md): stack, pages, API/data contract, repo layout
 
 ## Overview
 
@@ -75,44 +76,13 @@ If we fall behind, cut fine-tuning first. Keep the radar close study: it's our s
 
 ## Architecture
 
-The heavy processing runs once, offline, in Python. The React app only talks to a thin search API that loads an index of about 15 MB.
-
-```mermaid
-flowchart TD
-    M["Moon sources<br/>LRO via NASA Trek and PDS Geosciences<br/>WAC, LOLA, Diviner, Mini-RF"]
-    E["Earth sources<br/>Earth Engine, GIBS, Copernicus<br/>RADARSAT RCM, NASA POWER"]
-    P["Python pipeline (scripts/)<br/>01_tiles.py: tiles at the same ground scale on both bodies<br/>02_features.py: CLIP vectors + slope, relief, rocks"]
-    R["Radar close study<br/>Mini-RF vs RCM roughness<br/>2-3 candidate sites"]
-    I["Search index (data/index/)<br/>meta.parquet: one row per tile, physical features<br/>img.npy, shade.npy: 512-d CLIP embeddings"]
-    A["FastAPI search API<br/>analogatlas/analog.py: search, Earth-Moon matching, report card<br/>Embeds text queries with CLIP; calls NASA POWER live"]
-    F["React app<br/>One map per body, text or image search, analog lists<br/>Report card: where the analogy holds and where it breaks"]
-    M --> P
-    E --> P
-    E --> R
-    P --> I
-    I --> A
-    R --> A
-    A --> F
-```
-
-The API is the only part that runs Python while the app is in use, because text queries have to be turned into CLIP vectors. Everything else the frontend needs (tile images, coordinates, features) can be served as static files.
+Stack, pages, user flows, the API/data contract and repo layout are in [ARCHITECTURE.md](ARCHITECTURE.md). Short version: the heavy processing runs once, offline, in Python; the React app talks to a thin FastAPI search API that loads a ~15 MB index.
 
 ## Repo
 
-Code: [FionaL7/AnalogAtlas](https://github.com/FionaL7/AnalogAtlas), branch `main`.
+Code: [FionaL7/AnalogAtlas](https://github.com/FionaL7/AnalogAtlas), branch `main`. Repo layout and what each piece does: [ARCHITECTURE.md](ARCHITECTURE.md#repo-layout).
 
-The pipeline is two scripts built on a small `analogatlas` package. Git ignores `data/` and `.venv/`, so each developer rebuilds them on their own machine.
-
-| Path | What it does |
-| --- | --- |
-| `analogatlas/config.py` | Paths, tile scale (~85 km), data endpoints, CLIP model choice |
-| `analogatlas/tiles.py` | Builds the Moon (Trek WMTS) and Earth (GIBS WMS) tile grids at the same ground scale and downloads the tiles |
-| `analogatlas/rasters.py` | Reads PDS3 IMG files and ETOPO; per-tile slope, relief, rock abundance, temperature |
-| `analogatlas/embed.py` | CLIP image and text embeddings; rotation-averaged hillshades; text prompts averaged over templates |
-| `analogatlas/analog.py` | Search, Earth–Moon matching, NASA POWER climate lookup, analog report card |
-| `analogatlas/sites.py` | Known Earth analog sites (to tag results "known" or "new") and Moon and Earth preset sites |
-| `scripts/01_tiles.py` | Step 1: tile grids and tile download |
-| `scripts/02_features.py` | Step 2: physical features and embeddings, saved to `data/index/` |
+Git ignores `data/` and `.venv/`, so each developer rebuilds them on their own machine.
 
 ### Setup on a new machine
 
