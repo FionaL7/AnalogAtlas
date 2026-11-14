@@ -20,6 +20,7 @@ import pandas as pd
 import requests
 
 from . import config as C
+from .checks import push_down_mask
 from .sites import KNOWN_EARTH_ANALOGS
 
 log = logging.getLogger("analogatlas")
@@ -110,14 +111,17 @@ def search(index: BodyIndex, query_vec: np.ndarray, k: int = 12,
     return out
 
 
-def cross_body(src: BodyIndex, i: int, dst: BodyIndex, k: int = 12,
-               mask: np.ndarray | None = None, w_phys: float = 0.3) -> pd.DataFrame:
-    """Tiles on `dst` most similar to tile i on `src`.
+# How hard the search pushes down tiles that fail the ice, plant or water
+# checks (#33), per unit of w_phys. At the default w_phys=0.3 that is 2.4 in
+# score units, about 3.4 standard deviations of visual similarity: an ice
+# sheet that is the closest lookalike falls well out of the top results.
+# At w_phys=0 there is no push-down: the pure image-only ranking.
+ENV_PENALTY = 8.0
 
-    Visual: cosine between rotation-averaged hillshade embeddings (terrain shape,
-    independent of colour and sun direction).
-    Physical: closeness of slope and relief, measured on 1.9 km DEMs on both bodies.
-    """
+
+def cross_body_scores(src: BodyIndex, i: int, dst: BodyIndex, w_phys: float = 0.3
+                      ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """cross_body's score for every dst tile: (score, visual, physical, pushed)."""
     visual = dst.shade @ src.shade[i]
     s_row = src.meta.iloc[i]
     phys = np.nan_to_num(np.mean([
@@ -126,12 +130,28 @@ def cross_body(src: BodyIndex, i: int, dst: BodyIndex, k: int = 12,
     ], axis=0), nan=0.0)
     # standardise the visual score so the two parts mix on comparable scales
     v = (visual - visual.mean()) / (visual.std() + 1e-9)
-    score = (1 - w_phys) * v + w_phys * (phys - 0.5) * 4
+    pushed = push_down_mask(dst.meta)
+    score = (1 - w_phys) * v + w_phys * (phys - 0.5) * 4 - w_phys * ENV_PENALTY * pushed
+    return score, visual, phys, pushed
+
+
+def cross_body(src: BodyIndex, i: int, dst: BodyIndex, k: int = 12,
+               mask: np.ndarray | None = None, w_phys: float = 0.3) -> pd.DataFrame:
+    """Tiles on `dst` most similar to tile i on `src`.
+
+    Visual: cosine between rotation-averaged hillshade embeddings (terrain shape,
+    independent of colour and sun direction).
+    Physical: closeness of slope and relief, measured on 1.9 km DEMs on both bodies.
+    Environment: Earth tiles that are ice, plants or water are pushed down
+    (checks.PUSH_DOWN), so lookalike traps don't lead the results.
+    """
+    score, visual, phys, pushed = cross_body_scores(src, i, dst, w_phys)
     if mask is not None:
         score = np.where(mask, score, -np.inf)
     top = np.argsort(-score)[:k]
     out = dst.meta.iloc[top].copy()
     out["score"], out["visual_cos"], out["physical"], out["row"] = score[top], visual[top], phys[top], top
+    out["env_pushed"] = pushed[top]
     # percentile of the visual similarity among all candidate tiles -> 0..1
     out["visual_cos_scaled"] = [(visual < v).mean() for v in visual[top]]
     return out

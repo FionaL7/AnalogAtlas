@@ -47,7 +47,7 @@ export function TrapCard({ trap, compact }: { trap: Trap; compact?: boolean }) {
                 <dd className="tabular-nums">rank {trap.visual_rank}</dd>
               </div>
               <div>
-                <dt className="text-muted" title="cross_body: image + slope/relief">Image + slope</dt>
+                <dt className="text-muted" title="Our search: looks + slope/relief, ice, plants and water pushed down">Our search</dt>
                 <dd className="tabular-nums">rank {trap.physics_rank.toLocaleString()}</dd>
               </div>
               <div>

@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from analogatlas.analog import BodyIndex
+from analogatlas.analog import BodyIndex, cross_body
 from analogatlas.traps import check, find_traps, traps_for_tile
 
 DIM = 8
@@ -82,12 +82,32 @@ def test_shape_mismatch_is_a_trap_even_without_environment_data():
         assert not any(b["environment"] for b in t["breakers"])
 
 
-def test_physics_rank_is_reported_honestly_for_ice():
-    """cross_body's score knows slope/relief only, so a flat ice sheet under a
-    flat lunar plain still ranks high there. The trap must say so, not hide it."""
+def test_our_search_ranks_the_ice_trap_far_below_its_looks():
+    """The ice sheet is the #1 lookalike, but our search pushes it down (#33)."""
     moon, earth = _world()
     ice = _by_earth(traps_for_tile(moon, 0, earth, "moon", top_n=4))["e_ice"]
-    assert ice["physics_rank"] <= 3
+    assert ice["visual_rank"] == 1
+    assert ice["physics_rank"] > 3
+
+
+def test_search_puts_the_genuine_analog_above_ice_and_forest():
+    moon, earth = _world()
+    hits = cross_body(moon, 0, earth, k=len(earth.meta))
+    order = list(hits.tile_id)
+    assert order[0] == "e_good"
+    assert order.index("e_ice") > 3 and order.index("e_forest") > 3
+    assert bool(hits.set_index("tile_id").env_pushed["e_ice"])
+
+
+def test_no_physical_weight_is_the_image_only_ranking():
+    moon, earth = _world()
+    assert cross_body(moon, 0, earth, k=1, w_phys=0.0).tile_id.iloc[0] == "e_ice"
+
+
+def test_no_environment_data_means_no_push_down():
+    moon, earth = _world(with_env=False)
+    hits = cross_body(moon, 0, earth, k=3)
+    assert "e_ice" in set(hits.tile_id) and not hits.env_pushed.any()
 
 
 def test_model_score_is_passed_through_when_available():

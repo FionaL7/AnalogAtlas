@@ -11,14 +11,15 @@ How:
    in plain words and the numbers behind it.
 3. Record where three rankings put it:
    - visual_rank: image-only similarity (the trap)
-   - physics_rank: cross_body's score, which knows slope and relief only.
-     An ice sheet with lunar-like slopes can still rank high here; that is
-     reported, not hidden
+   - physics_rank: where our search (cross_body) puts it. It weighs slope
+     and relief and pushes ice, plants and water down (#33), so a trap should
+     rank far lower here than on looks alone
    - model_score_pct: the #29 analog model (earth_scores.parquet), which knows
      ice, plants and climate. 1 = most like known Moon analogs
 
-Environment checks need the Earth environment columns (earth_ee.environment).
-Without them, only the slope/relief checks run.
+The environment checks are defined once in checks.py and shared with the
+search. They need the Earth environment columns (earth_ee.environment);
+without them, only the slope/relief checks run.
 """
 from __future__ import annotations
 
@@ -27,7 +28,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from .analog import BodyIndex, _closeness
+from . import checks as K
+from .analog import BodyIndex, _closeness, cross_body_scores
 
 TOP_N = 20          # lookalikes considered per lunar tile
 W_PHYS = 0.3        # same default as cross_body / the API
@@ -64,18 +66,19 @@ def check(moon: pd.Series, earth: pd.Series) -> list[dict]:
         b = BREAKERS[bid]
         hits.append(dict(id=b.id, label=b.label, environment=b.environment, reason=reason))
 
+    flags = K.env_flags(earth.to_frame().T).iloc[0]
     ice, veg, water = _num(earth, "ice_frac"), _num(earth, "veg_frac"), _num(earth, "water_frac")
     ndvi, aridity = _num(earth, "ndvi"), _num(earth, "aridity")
-    if ice is not None and ice >= 0.5:
+    if flags["ice"]:
         hit("ice", f"{ice:.0%} permanent ice. Smooth because ice flows and snow fills the hollows; "
                    "the Moon's plains are rock and dust")
-    if (veg is not None and veg >= 0.3) or (ndvi is not None and ndvi >= 0.4):
-        what = f"{veg:.0%} forest, savanna or crops" if veg is not None and veg >= 0.3 else f"greenness {ndvi:.2f}"
+    if flags["vegetation"]:
+        what = (f"{veg:.0%} forest, savanna or crops" if veg is not None and veg >= K.VEG_MIN
+                else f"greenness {ndvi:.2f}")
         hit("vegetation", f"{what}. The shape matches, but the surface is soil and roots, not regolith")
-    if water is not None and water >= 0.3:
+    if flags["water"]:
         hit("water", f"{water:.0%} lakes or wetland")
-    if aridity is not None and aridity >= 0.65 and not (ice is not None and ice >= 0.5):
-        # UNEP aridity index: below 0.65 counts as dryland
+    if flags["wet_climate"]:
         hit("wet_climate", f"Rain-to-evaporation ratio {aridity:.2f} (drylands are below 0.65): "
                            "rain and rivers shaped it; the Moon has no liquid water")
     s_m, s_e = _num(moon, "slope_med"), _num(earth, "slope_med")
@@ -87,18 +90,6 @@ def check(moon: pd.Series, earth: pd.Series) -> list[dict]:
     return hits
 
 
-def _physics_scores(src: BodyIndex, i: int, dst: BodyIndex, visual: np.ndarray,
-                    w_phys: float) -> np.ndarray:
-    """cross_body's ranking score for every dst tile, for source tile i."""
-    s_row = src.meta.iloc[i]
-    phys = np.nan_to_num(np.mean([
-        _closeness(dst.meta.slope_med.values, s_row.slope_med, 1.0),
-        _closeness(dst.meta.relief_km.values, s_row.relief_km, 1.0),
-    ], axis=0), nan=0.0)
-    v = (visual - visual.mean()) / (visual.std() + 1e-9)
-    return (1 - w_phys) * v + w_phys * (phys - 0.5) * 4
-
-
 def traps_for_tile(src: BodyIndex, i: int, dst: BodyIndex, src_body: str,
                    top_n: int = TOP_N, w_phys: float = W_PHYS,
                    model_scores: dict[str, float] | None = None) -> list[dict]:
@@ -106,9 +97,8 @@ def traps_for_tile(src: BodyIndex, i: int, dst: BodyIndex, src_body: str,
 
     `model_scores`: Earth tile_id -> #29 analog_score_moon (0-1), if available.
     """
-    visual = dst.shade @ src.shade[i]
+    score, visual, _, _ = cross_body_scores(src, i, dst, w_phys)
     order = np.argsort(-visual)
-    score = _physics_scores(src, i, dst, visual, w_phys)
     s_row = src.meta.iloc[i]
     out = []
     for vis_rank, j in enumerate(order[:top_n], start=1):
