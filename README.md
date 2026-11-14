@@ -1,147 +1,40 @@
-# AnalogAtlas — Plan & Status
+# AnalogAtlas
 
 Search engine for planetary analogs, built for the NASA Space Apps 2026 challenge [*Identify Earth Locations that Analog the Permanent Moon Base Locations and Mars*](https://www.spaceappschallenge.org/2026/challenges/permanent-moon-base-locations-and-mars/).
 
-- Challenge brief (verbatim): [docs/BRIEF.md](docs/BRIEF.md)
-- Requirements analysis: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)
-- Data resources: [docs/RESOURCES.md](docs/RESOURCES.md)
-- Target sites (Moon, Mars): [docs/TARGET-SITES.md](docs/TARGET-SITES.md)
-- Plan, status and open decisions: [docs/PLAN.md](docs/PLAN.md)
-As of 14 Nov 2026. Related docs:
-- [BRIEF.md](BRIEF.md): the challenge text
-- [REQUIREMENTS.md](REQUIREMENTS.md): requirements and the submission checklist
-- [RESOURCES.md](RESOURCES.md): data sources
+- **Earth analogs for a Moon-base site.** Rank Earth's land tiles by similarity to a lunar site, then show a report card of where the analogy holds and where it breaks down.
+- **Find terrain on the Moon.** Describe an Earth landscape in words, or upload an image, and get the matching lunar terrain.
+- **Both directions.** The same search, Earth → Moon or Moon → Earth.
 
-## Overview
+Similarity is not just "looks alike": CLIP embeddings find candidates, and slope, relief, rock cover, temperature and radar roughness — measured from NASA data on both bodies — decide whether the analogy actually holds.
 
-AnalogAtlas is a search engine for planetary analogs. You can describe an Earth landscape and find matching terrain on the Moon, or pick a lunar site and get a ranked list of Earth analogs. Each analog comes with a report card showing where the analogy holds and where it breaks down.
+## Docs
 
-It answers the NASA Space Apps 2026 challenge *Identify Earth Locations that Analog the Permanent Moon Base Locations and Mars*. The judges stress three things, and each has a matching part of our design:
-
-| Judges want | How we answer |
+| Doc | What's in it |
 | --- | --- |
-| Go beyond visual similarity | CLIP finds terrain that looks alike; slope, relief, rock cover, temperature and radar roughness check whether it really is alike |
-| New, unrecognized analogs | Results near well-known analog sites are tagged "known" (`analogatlas/sites.py`); we lead with the untagged ones |
-| Say where it breaks down | Every analog gets a report card: dimension by dimension, holds or breaks |
+| [docs/PLAN.md](docs/PLAN.md) | Status, decisions, next steps |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Stack, pages, API and data contract, repo layout |
+| [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | What we must deliver, and the submission checklist |
+| [docs/TARGET-SITES.md](docs/TARGET-SITES.md) | The Moon and Mars sites we find analogs for |
+| [docs/BRIEF.md](docs/BRIEF.md) | The challenge text, verbatim |
+| [docs/RESOURCES.md](docs/RESOURCES.md) | Data sources and tools |
+| [AGENTS.md](AGENTS.md) | How we work — read this before contributing |
 
-There are two stages:
+## Run the pipeline
 
-1. **Global screening.** We split the Moon and Earth's land into tiles of about 85 × 85 km. Each tile gets CLIP embeddings (vectors describing what it looks like) and physical measurements, and search runs across both bodies.
-2. **Close study.** For the 2–3 strongest *new* candidates, we compare radar surface roughness (RADARSAT RCM or Sentinel-1 on Earth, LRO Mini-RF on the Moon), add high-resolution imagery and slopes, and write a full report card.
+Download the [raw rasters](#raw-data) into `data/raw/` first. PyTorch picks its own device: Apple GPU (MPS) on a Mac, CUDA on an NVIDIA GPU, otherwise CPU — fine for 5k tiles, just slower.
 
-Scope: the Moon first. How much Mars gets is an [open decision](#open-decisions).
-
-## Status
-
-The Moon search index (60°S to 60°N) is built and verified. The Earth side, the API and the app haven't been started.
-
-| Piece | State | Notes |
-| --- | --- | --- |
-| Python environment | Done (Dev A's Mac) | Python 3.12, PyTorch on the Apple GPU (MPS), open_clip, FAISS, rasterio |
-| Moon tiles | Done | 5,376 tiles from 60°S to 60°N, each with an LROC WAC image and a LOLA hillshade |
-| Moon physical features | Done | Slope, relief and elevation (LOLA); rock abundance and regolith-temperature anomaly (Diviner) |
-| Moon CLIP embeddings | Done | 512-d image vectors, plus hillshade vectors averaged over four 90° rotations |
-| Moon south pole (> 60°S) | Not started | **Where candidate Moon-base sites are.** See [open decisions](#open-decisions) |
-| Earth side | Not started | Moving to Google Earth Engine. A working fallback path (GIBS tiles + ETOPO elevation) is in the code; 2,294 of its ~11.7k tiles are on Dev A's disk |
-| Search API | Not started | The search logic is in `analogatlas/analog.py`; it needs a FastAPI wrapper |
-| React frontend | Not started | Replaces an earlier Streamlit draft, which has been removed |
-| Radar close study | Not started | Needs RCM or Sentinel-1 scenes and Mini-RF data |
-| Mars | Not started | |
-
-**Verification.** Three text queries on the Moon index returned the expected terrain, and slopes measured independently from LOLA elevation data agree:
-
-| Query | Top 6 results | Median slope of top 6 |
-| --- | --- | --- |
-| "a large impact crater with a central peak" | Craters, several with central peaks | 4.7° |
-| "smooth flat dark lava plains" | Dark mare with wrinkle ridges | 0.4° |
-| "rugged mountainous highlands" | Rough, heavily cratered highlands | 5.7° |
-
-For comparison, the median slope across all Moon tiles is 3.9°. The ML results agree with independent elevation data, which is the first point to make on the slides.
-
-## Challenge fit
-
-Requirements, judging criteria, dimension coverage, things to avoid and the submission checklist are all in [REQUIREMENTS.md](REQUIREMENTS.md). The biggest gap: **"permanent Moon base" means the lunar south pole.** NASA's Artemis candidate landing regions are all near the south pole, and our index stops at 60°S. See [open decisions](#open-decisions).
-
-## Time and team
-
-The event runs **14–15 Nov 2026**. We have **36 hours** to finish, and it has already started.
-
-| | Dev A: data and ML | Dev B: app and radar |
-| --- | --- | --- |
-| First | Earth index (Earth Engine): tiles, slope and relief, embeddings | FastAPI wrapper around `analog.py`; React skeleton on a mocked API |
-| Then | South pole (if decided) or crater labels from Robbins + precision@k | Pick 2–3 new candidates; RCM or Sentinel-1 roughness vs Mini-RF |
-| Last | Accuracy charts, limitations | Close-study pages, deploy, demo (≤30 s video or ≤7 slides), write-up |
-
-**Milestones**, in order:
-1. Search works end to end on real data, Earth and Moon. This is the critical milestone; everything else builds on it.
-2. Close study done for 2–3 sites.
-3. Feature freeze, then the demo, slides and write-up.
-4. Submit together, leaving a buffer before the deadline: **Sun 15 Nov, 11:59 p.m.** local time of our Local Event. Follow the [submission checklist](REQUIREMENTS.md#5-deliverable-checklist-space-apps-submission).
-
-If we fall behind, cut fine-tuning first. Keep the radar close study: it's our strongest answer to "beyond visual similarity".
-
-## Architecture
-
-The heavy processing runs once, offline, in Python. The React app only talks to a thin search API that loads an index of about 15 MB.
-
-```mermaid
-flowchart TD
-    M["Moon sources<br/>LRO via NASA Trek and PDS Geosciences<br/>WAC, LOLA, Diviner, Mini-RF"]
-    E["Earth sources<br/>Earth Engine, GIBS, Copernicus<br/>RADARSAT RCM, NASA POWER"]
-    P["Python pipeline (scripts/)<br/>01_tiles.py: tiles at the same ground scale on both bodies<br/>02_features.py: CLIP vectors + slope, relief, rocks"]
-    R["Radar close study<br/>Mini-RF vs RCM roughness<br/>2-3 candidate sites"]
-    I["Search index (data/index/)<br/>meta.parquet: one row per tile, physical features<br/>img.npy, shade.npy: 512-d CLIP embeddings"]
-    A["FastAPI search API<br/>analogatlas/analog.py: search, Earth-Moon matching, report card<br/>Embeds text queries with CLIP; calls NASA POWER live"]
-    F["React app<br/>One map per body, text or image search, analog lists<br/>Report card: where the analogy holds and where it breaks"]
-    M --> P
-    E --> P
-    E --> R
-    P --> I
-    I --> A
-    R --> A
-    A --> F
-```
-
-The API is the only part that runs Python while the app is in use, because text queries have to be turned into CLIP vectors. Everything else the frontend needs (tile images, coordinates, features) can be served as static files.
-
-## Repo
-
-Code: [FionaL7/AnalogAtlas](https://github.com/FionaL7/AnalogAtlas), branch `main`.
-
-The pipeline is two scripts built on a small `analogatlas` package. Git ignores `data/` and `.venv/`, so each developer rebuilds them on their own machine.
-
-| Path | What it does |
-| --- | --- |
-| `analogatlas/config.py` | Paths, tile scale (~85 km), data endpoints, CLIP model choice |
-| `analogatlas/tiles.py` | Builds the Moon (Trek WMTS) and Earth (GIBS WMS) tile grids at the same ground scale and downloads the tiles |
-| `analogatlas/rasters.py` | Reads PDS3 IMG files and ETOPO; per-tile slope, relief, rock abundance, temperature |
-| `analogatlas/embed.py` | CLIP image and text embeddings; rotation-averaged hillshades; text prompts averaged over templates |
-| `analogatlas/analog.py` | Search, Earth–Moon matching, NASA POWER climate lookup, analog report card |
-| `analogatlas/sites.py` | Known Earth analog sites (to tag results "known" or "new") and Moon and Earth preset sites |
-| `scripts/01_tiles.py` | Step 1: tile grids and tile download |
-| `scripts/02_features.py` | Step 2: physical features and embeddings, saved to `data/index/` |
-
-### Setup on a new machine
-
-Put the raw rasters in `data/raw/` first (download URLs are in the [README](../README.md)). PyTorch picks the device: Apple GPU (MPS) on a Mac, CUDA on an NVIDIA GPU, otherwise CPU (slower, but fine for 5k tiles).
-
-#### Linux / macOS
-
-### Linux / macOS
+### macOS / Linux
 
 ```bash
 uv venv --python 3.12
 source .venv/bin/activate
 uv pip install -r requirements.txt
-python scripts/01_tiles.py moon    # build the grid + download tiles (~5.4k Moon tiles)
-python scripts/02_features.py moon # DEM/Diviner stats + CLIP embeddings
-# "earth" runs the GIBS + ETOPO fallback (~11.7k tiles); the main Earth path is moving to Earth Engine
-# search API (FastAPI) and React frontend: not built yet
+python scripts/01_tiles.py moon     # grid + tile download (~5.4k Moon tiles, ~11k requests to NASA Trek)
+python scripts/02_features.py moon  # DEM/Diviner stats + CLIP embeddings (~5 min on an M1)
 ```
 
-### Windows
-
-In PowerShell:
+### Windows (PowerShell)
 
 ```powershell
 uv venv --python 3.12
@@ -151,58 +44,44 @@ python scripts\01_tiles.py moon
 python scripts\02_features.py moon
 ```
 
-On the first run, PyTorch uses CUDA if you have an NVIDIA GPU and the CPU otherwise. If HTTPS downloads fail with a certificate error, see the Windows setup notes in [docs/PLAN.md](docs/PLAN.md#windows).
+Pass `earth` instead of `moon` for the GIBS + ETOPO fallback path (~11.7k tiles). The main Earth path is moving to Google Earth Engine — see [docs/PLAN.md](docs/PLAN.md).
 
-The raw rasters go in `data/raw/`. They are downloaded once:
-python scripts/01_tiles.py moon     # ~11k tile requests to NASA Trek
-python scripts/02_features.py moon  # ~5 min on an M1
-```
+If HTTPS downloads fail with a certificate error, your certificate store is probably missing a root one of the data hosts relies on. We hit this on Windows with spaceappschallenge.org.
 
-#### Windows
+## Raw data
 
-In PowerShell:
+Download once into `data/raw/`. **Take the `.lbl` label file next to each `.img`** — the PDS3 reader in `analogatlas/rasters.py` parses it for the array shape and scaling, so an `.img` alone won't load. ~656 MB total.
 
-```powershell
-uv venv --python 3.12
-.venv\Scripts\Activate.ps1
-uv pip install -r requirements.txt
-python scripts\01_tiles.py moon
-python scripts\02_features.py moon
-```
+| File | Size | Source |
+| --- | --- | --- |
+| `ldem_16.img` + `.lbl` | 32 MB | [PDS Geosciences — LRO LOLA GDR, cylindrical](https://pds-geosciences.wustl.edu/lro/lro-l-lola-3-rdr-v1/lrolol_1xxx/data/lola_gdr/cylindrical/img/) |
+| `dgdr_ra_avg_cyl_032_img.img` + `.lbl` | 84 MB | [PDS Geosciences — LRO Diviner GDR L3, cylindrical](https://pds-geosciences.wustl.edu/lro/urn-nasa-pds-lro_diviner_derived1/data_derived_gdr_l3/cylindrical/img/) (rock abundance) |
+| `dgdr_st_avg_cyl_032_img.img` + `.lbl` | 84 MB | same directory (regolith temperature anomaly) |
+| `ETOPO_2022_v1_60s_N90W180_surface.nc` | 456 MB | [NOAA NCEI — ETOPO 2022, 60 arc-second](https://www.ngdc.noaa.gov/thredds/fileServer/global/ETOPO2022/60s/60s_surface_elev_netcdf/ETOPO_2022_v1_60s_N90W180_surface.nc) |
 
-If HTTPS downloads fail with a certificate error, the Windows certificate store is probably missing a root that a data host relies on. We saw this with spaceappschallenge.org.
+Exact filenames are set in [`analogatlas/config.py`](analogatlas/config.py). LOLA LDEM_16 (1.9 km/px) and ETOPO 60s (1.85 km/px) sample at nearly the same resolution, which is what makes slope and relief comparable between the two bodies.
 
-The outputs land in `data/index/`:
-- `moon_meta.parquet`: one row per tile, with coordinates and physical features
-- `moon_img.npy` and `moon_shade.npy`: 5,376 × 512 float16 embeddings, 5.5 MB each
+## Outputs
 
-These three files are all the search API needs.
+`data/index/`, which is everything the search needs:
 
-## Next steps
+- `{body}_meta.parquet` — one row per tile: coordinates and physical features
+- `{body}_img.npy`, `{body}_shade.npy` — `(N, 512)` float16 CLIP embeddings, row-aligned with the parquet
 
-The next milestone is the Earth index. Every Earth–Moon feature in the app depends on it.
+Moon: 5,376 tiles, 5.5 MB per matrix. Earth: ~11.7k tiles, ~12 MB per matrix.
 
-- [ ] Decide the south-pole and Mars questions below
-- [ ] Register Google Earth Engine (non-commercial use) with a Google Cloud project
-- [ ] Earth pipeline in Earth Engine: tile grid, Copernicus DEM slope and relief, export a table
-- [ ] Earth tile images (ASTER hillshade + imagery) and their CLIP embeddings
-- [ ] FastAPI wrapper around `analogatlas/analog.py` with `/search`, `/analogs`, `/twins`, `/tile`
-- [ ] React app skeleton against mocked API responses
-- [ ] Run the CSA SAR tutorial on one RCM scene
-- [ ] Download Mini-RF and the polar LOLA / Diviner products
-- [ ] Add the fixed "Earth's limits" rows to the report card in `analog.py`
+`data/` and `.venv/` are not in git. See [docs/PLAN.md](docs/PLAN.md#open-decisions) for how the built index is shared between machines.
 
-## Decisions
+## Data sources and credits
 
-**Decided:**
-- Moon first
-- React frontend
-- Laptop + Earth Engine + Colab, no paid cloud
-- Two developers: Dev A (data and ML), Dev B (app and radar)
+Every dataset, with its source and status, is listed in [docs/RESOURCES.md](docs/RESOURCES.md). NASA: LRO (LOLA, Diviner, LROC WAC via Moon Trek, Mini-RF), GIBS / Worldview, ASTER GDEM, NASA POWER. Space agency partners: CSA (RADARSAT RCM, SAR tutorial), ESA (Copernicus DEM, Sentinel-1/2). Other: NOAA ETOPO 2022.
 
-### Open decisions
+## Use of AI tools
 
-- **South pole: stretch goal, or core scope?** The challenge title asks for analogs of *permanent Moon-base locations*. Artemis candidate base sites are all near the lunar south pole, and our index stops at 60°S. Without the pole, the demo answers "Earth analogs for lunar terrain", not "for Moon-base sites". **Recommendation: make it core.** Add polar LOLA and Diviner tiles (polar stereographic, so a separate grid) and the Artemis candidate regions as Moon presets. Compare on the dimensions a base cares about: illumination, cold traps and ice, slope, and Earth permafrost or polar-desert analogs. If we fall behind, cut fine-tuning instead.
-- **How much Mars?** The title gives Mars equal billing ("future Mars landing and exploration sites"). Options: one slide showing the method transfers, or a small Mars index (MOLA plus CTX or THEMIS tiles) with the same search on 2–3 Mars landing sites.
-- **React map library:** MapLibre (one map per body) or Leaflet? Leaflet handles Trek's EPSG:4326 Moon tiles out of the box; the polar tiles would need a separate projection either way.
-- **Hosting:** frontend on Vercel or GitHub Pages; API on Hugging Face Spaces, where the ~15 MB index fits easily.
+This project was built with AI assistance, disclosed as the Space Apps rules require:
+
+- **Claude Code** (Anthropic) was used to write and review code and documentation. Commits it co-authored carry a `Co-Authored-By: Claude` trailer, so the AI-assisted history is auditable.
+- The solution idea, the challenge approach, and the scientific interpretation are the team's own.
+- No AI-generated imagery, video or audio is used in the project or its submission materials.
+
+Model weights: CLIP `ViT-B-32` / `laion2b_s34b_b79k` via [open_clip](https://github.com/mlfoundations/open_clip) (LAION), used for image and text embeddings.

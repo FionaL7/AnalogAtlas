@@ -87,7 +87,7 @@ Git ignores `data/` and `.venv/`, so each developer rebuilds them on their own m
 
 ### Setup on a new machine
 
-Put the raw rasters in `data/raw/` first (download URLs are in the [README](../README.md)). PyTorch picks the device: Apple GPU (MPS) on a Mac, CUDA on an NVIDIA GPU, otherwise CPU (slower, but fine for 5k tiles).
+Put the raw rasters in `data/raw/` first — download URLs, sizes and the `.lbl` gotcha are in the [README](../README.md#raw-data). PyTorch picks the device: Apple GPU (MPS) on a Mac, CUDA on an NVIDIA GPU, otherwise CPU (slower, but fine for 5k tiles).
 
 #### Linux / macOS
 
