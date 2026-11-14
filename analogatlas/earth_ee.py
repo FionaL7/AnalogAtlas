@@ -98,7 +98,8 @@ ENV_YEARS = ("2015-01-01", "2025-01-01")
 LAND_CLASSES = {
     "ice_frac": [15],                        # permanent snow and ice
     "barren_frac": [16],                     # barren / sparse
-    "veg_frac": list(range(1, 11)) + [12, 14],  # forest, shrub, savanna, grass, crops
+    "veg_frac": [1, 2, 3, 4, 5, 6, 8, 9, 12, 14],  # forest, closed shrub, savannas, crops
+    "sparse_frac": [7, 10],                  # open shrubland, grassland: desert scrub counts here
     "water_frac": [11, 17],                  # wetland, water
     "urban_frac": [13],
 }
@@ -140,7 +141,8 @@ def environment(grid: pd.DataFrame, batch: int = 150, workers: int = 4) -> pd.Da
     precip_mm    TerraClimate annual precipitation; aridity = precip / PET
     solar_wm2    TerraClimate mean downward shortwave
     ndvi         MODIS NDVI mean
-    *_frac       MODIS MCD12Q1 land-cover fractions (ice, barren, veg, water, urban)
+    *_frac       MODIS MCD12Q1 land-cover fractions (ice, barren, sparse veg,
+                 dense veg, water, urban)
     access_min   travel time to nearest city (Oxford/MAP 2015), 10th percentile
                  in the tile = the most reachable part; NaN = no data
                  (mostly Antarctica, i.e. very remote)
@@ -157,7 +159,7 @@ def environment(grid: pd.DataFrame, batch: int = 150, workers: int = 4) -> pd.Da
             p = {k: (np.nan if v is None else v) for k, v in f["properties"].items()}
             row = {"tile_id": p["tile_id"]}
             for band in ["lst_day_c", "lst_night_c", "lst_cold_c", "lst_hot_c", "precip_mm",
-                         "pet_mm", "solar_wm2", "ndvi", *LAND_CLASSES]:
+                         "pet_mm", "solar_wm2", "ndvi", *LAND_CLASSES]:  # noqa: E501
                 row[band] = p.get(f"{band}_mean", np.nan)
             row["access_min"] = p.get("access_min_p10", np.nan)
             out.append(row)

@@ -39,7 +39,90 @@ KNOWN_EARTH_ANALOGS = {
     "Wadi Rum, Jordan": (29.57, 35.42),
     "Mojave Desert (Desert RATS), USA": (35.00, -116.00),
     "Pavilion Lake, Canada": (50.87, -121.74),
+    # added for the analog model (#29); field-test and literature analog sites
+    "Axel Heiberg Island (Expedition Fiord), Canada": (79.41, -90.73),
+    "Manicouagan Crater, Canada": (51.38, -68.70),
+    "Vredefort Dome, South Africa": (-27.00, 27.50),
+    "Gosses Bluff, Australia": (-23.82, 132.31),
+    "Wolfe Creek Crater, Australia": (-19.17, 127.80),
+    "Shoemaker Crater, Australia": (-25.87, 120.88),
+    "Tenoumer Crater, Mauritania": (22.92, -10.40),
+    "Aorounga Crater, Chad": (19.10, 19.25),
+    "Kamil Crater, Egypt": (22.02, 26.09),
+    "Teide, Tenerife, Spain": (28.27, -16.64),
+    "Mount Etna, Italy (ARCHES)": (37.75, 14.99),
+    "Lava Beds National Monument, USA": (41.71, -121.51),
+    "Undara lava tubes, Australia": (-18.25, 144.60),
+    "Namib Desert (Sossusvlei), Namibia": (-24.73, 15.30),
+    "Ladakh (Tso Kar), India": (33.30, 77.99),
+    "Salar de Uyuni, Bolivia": (-20.13, -67.49),
+    "Licancabur, Bolivia/Chile": (-22.83, -67.88),
+    "Shark Bay (Hamelin Pool), Australia": (-26.40, 114.16),
+    "El Pinacate, Mexico": (31.77, -113.50),
+    "Bonneville Salt Flats, USA": (40.76, -113.89),
+    "Makhtesh Ramon, Israel (D-MARS / AMADEE-20)": (30.60, 34.80),
 }
+
+# What each known analog is an analog *for* (training labels for learn.py).
+#   target:  "moon" and/or "mars"
+#   roles:   volcanic, impact, polar, arid, aqueous, lava_tube
+#   surface: True if the site is used for what its *surface* is like (field
+#            tests, terrain, regolith). False for process analogs whose surface
+#            looks nothing like the Moon or Mars (forested or eroded impact
+#            structures, lakes, springs); learn.py trains on surface sites only.
+def _a(target, roles, surface=True):
+    return {"target": tuple(target.split()), "roles": tuple(roles.split()), "surface": surface}
+
+
+ANALOG_INFO = {
+    "Atacama Desert (Yungay), Chile": _a("mars moon", "arid"),
+    "Haughton Crater, Devon Island, Canada": _a("mars moon", "impact polar"),
+    "Death Valley, USA": _a("mars", "arid"),
+    "McMurdo Dry Valleys, Antarctica": _a("mars", "polar arid"),
+    "Mauna Kea, Hawaii (PISCES)": _a("moon mars", "volcanic"),
+    "Kilauea, Hawaii": _a("moon mars", "volcanic"),
+    "Holuhraun / Askja, Iceland": _a("moon mars", "volcanic"),
+    "Craters of the Moon, Idaho, USA": _a("moon mars", "volcanic lava_tube"),
+    "Meteor Crater, Arizona, USA": _a("moon", "impact arid"),
+    "San Francisco Volcanic Field (Cinder Lake), USA": _a("moon", "volcanic arid"),
+    "Mars Desert Research Station, Utah, USA": _a("mars", "arid"),
+    "Rio Tinto, Spain": _a("mars", "aqueous", surface=False),
+    "Svalbard (Bockfjorden), Norway": _a("mars", "volcanic polar"),
+    "Lanzarote (PANGAEA), Spain": _a("moon mars", "volcanic lava_tube"),
+    "Ries Crater, Germany": _a("moon", "impact", surface=False),
+    "Lonar Crater, India": _a("moon mars", "impact", surface=False),
+    "Sudbury Basin, Canada": _a("moon", "impact", surface=False),
+    "Mistastin Lake Crater, Canada": _a("moon", "impact", surface=False),
+    "Dallol / Danakil Depression, Ethiopia": _a("mars", "aqueous arid"),
+    "Pilbara, Australia": _a("mars", "aqueous arid"),
+    "Arkaroola, Australia": _a("mars", "arid"),
+    "Qaidam Basin, China": _a("mars", "arid"),
+    "Wadi Rum, Jordan": _a("mars", "arid"),
+    "Mojave Desert (Desert RATS), USA": _a("moon mars", "arid volcanic"),
+    "Pavilion Lake, Canada": _a("mars", "aqueous", surface=False),
+    "Axel Heiberg Island (Expedition Fiord), Canada": _a("mars", "polar aqueous"),
+    "Manicouagan Crater, Canada": _a("moon mars", "impact", surface=False),
+    "Vredefort Dome, South Africa": _a("moon", "impact", surface=False),
+    "Gosses Bluff, Australia": _a("mars moon", "impact arid"),
+    "Wolfe Creek Crater, Australia": _a("moon mars", "impact arid"),
+    "Shoemaker Crater, Australia": _a("mars", "impact arid"),
+    "Tenoumer Crater, Mauritania": _a("moon mars", "impact arid"),
+    "Aorounga Crater, Chad": _a("mars", "impact arid"),
+    "Kamil Crater, Egypt": _a("moon", "impact arid"),
+    "Teide, Tenerife, Spain": _a("mars moon", "volcanic"),
+    "Mount Etna, Italy (ARCHES)": _a("moon", "volcanic"),
+    "Lava Beds National Monument, USA": _a("moon mars", "lava_tube volcanic"),
+    "Undara lava tubes, Australia": _a("moon mars", "lava_tube volcanic", surface=False),
+    "Namib Desert (Sossusvlei), Namibia": _a("mars", "arid"),
+    "Ladakh (Tso Kar), India": _a("mars", "arid polar"),
+    "Salar de Uyuni, Bolivia": _a("mars", "arid aqueous"),
+    "Licancabur, Bolivia/Chile": _a("mars", "volcanic arid"),
+    "Shark Bay (Hamelin Pool), Australia": _a("mars", "aqueous", surface=False),
+    "El Pinacate, Mexico": _a("moon mars", "volcanic arid"),
+    "Bonneville Salt Flats, USA": _a("mars", "arid aqueous"),
+    "Makhtesh Ramon, Israel (D-MARS / AMADEE-20)": _a("mars", "arid"),
+}
+assert set(ANALOG_INFO) == set(KNOWN_EARTH_ANALOGS)
 
 MOON_SITES = {
     "Apollo 11 - Mare Tranquillitatis": (0.67, 23.47),
