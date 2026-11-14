@@ -2,6 +2,7 @@
 
     python scripts/02_features.py            # both bodies
     python scripts/02_features.py earth      # one body
+    python scripts/02_features.py earth --meta-only   # redo features, keep embeddings
 
 Writes data/index/{body}_meta.parquet, {body}_shade.npy, {body}_img.npy
 """
@@ -43,7 +44,9 @@ def embed_all(paths, shade):
     return np.concatenate(out).astype(np.float16)
 
 
-for body in sys.argv[1:] or ["moon", "earth"]:
+args = sys.argv[1:]
+meta_only = "--meta-only" in args
+for body in [a for a in args if not a.startswith("--")] or ["moon", "earth"]:
     grid = pd.read_parquet(C.INDEX / f"{body}_grid.parquet")
     have = grid.tile_id.map(lambda t: tile_path(body, "img", t).exists() and tile_path(body, "shade", t).exists())
     grid = grid[have].reset_index(drop=True)
@@ -52,6 +55,16 @@ for body in sys.argv[1:] or ["moon", "earth"]:
     meta = rasters.moon_physical(grid) if body == "moon" else rasters.earth_physical(grid)
     if body == "earth":
         meta["greenness"], meta["brightness"] = colour_stats([tile_path(body, "img", t) for t in grid.tile_id])
+        if C.EE_PROJECT:
+            from analogatlas import earth_ee
+            meta = pd.concat([meta, earth_ee.environment(grid)], axis=1)
+    if meta_only:
+        old = pd.read_parquet(C.INDEX / f"{body}_meta.parquet")
+        assert old.tile_id.tolist() == meta.tile_id.tolist(), "tile set changed: run without --meta-only"
+        meta.to_parquet(C.INDEX / f"{body}_meta.parquet")
+        write_order_stamp(body, meta)              # order unchanged (asserted above)
+        print(f"{body}: meta rewritten, embeddings kept")
+        continue
     meta.to_parquet(C.INDEX / f"{body}_meta.parquet")
 
     np.save(C.INDEX / f"{body}_shade.npy", embed_all([tile_path(body, "shade", t) for t in grid.tile_id], True))

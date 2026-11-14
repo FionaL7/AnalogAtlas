@@ -183,6 +183,11 @@ Row order in the two `.npy` files matches `_meta.parquet` exactly. Nothing re-so
 | `regolith_t_anom` | moon | Diviner GDR L3 | Regolith temperature anomaly |
 | `t_max_k`, `t_min_k` | moon | `rasters.lunar_temperature_model` | Modelled surface extremes vs latitude, **not** a direct measurement — say so in the UI |
 | `greenness`, `brightness` | earth | Blue Marble tile | Excess-green index and mean brightness |
+| `lst_day_c`, `lst_night_c`, `lst_hot_c`, `lst_cold_c`, `lst_swing_c` | earth | MODIS LST 2015–24 (Earth Engine) | Surface temperature, °C: day/night mean, hottest day (p95), coldest night (p5), day−night swing |
+| `precip_mm`, `aridity`, `solar_wm2` | earth | TerraClimate 2015–24 | Annual precipitation; precip/PET (capped at 10); mean shortwave. Unreliable in Antarctica |
+| `ndvi` | earth | MODIS NDVI 2015–24 | Vegetation |
+| `ice_frac`, `barren_frac`, `veg_frac`, `water_frac`, `urban_frac` | earth | MODIS MCD12Q1 2023 | Land-cover fractions. `ice_frac` flags ice sheets, which look like smooth lunar plains but aren't rock |
+| `access_min` | earth | Oxford/MAP accessibility 2015 | Travel time to the nearest city, minutes (10th percentile in the tile = its most reachable part). NaN = no data (mostly Antarctica) |
 
 Slope and relief are comparable across bodies **by construction**: LOLA LDEM_16 is 1.9 km/px and the Earth DEM (Copernicus GLO-30) is resampled to 1.85 km/px in Earth Engine, so both are measured at the same baseline. This is the sentence to put on the methodology page.
 
