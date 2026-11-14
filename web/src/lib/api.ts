@@ -45,13 +45,41 @@ export function search(req: SearchRequest): Promise<SearchResponse> {
   return request<SearchResponse>("/search", { method: "POST", body: JSON.stringify(req) });
 }
 
-export function analogs(req: AnalogsRequest): Promise<AnalogsResponse> {
-  if (!isLive()) return Promise.resolve(mockAnalogs(req));
+/**
+ * The static export (§4.2) is tried first wherever a `siteId` is known, so the
+ * demo path keeps working with the API stopped — which is the whole point of
+ * precomputing it. Missing file just means "not exported", not an error.
+ */
+async function fromStatic<T>(path: string): Promise<T | null> {
+  try {
+    const res = await fetch(path);
+    return res.ok ? ((await res.json()) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function analogs(req: AnalogsRequest, siteId?: string): Promise<AnalogsResponse> {
+  if (siteId) {
+    const exported = await fromStatic<AnalogsResponse>(`/data/analogs/${siteId}.json`);
+    if (exported) return exported;
+  }
+  if (!isLive()) return mockAnalogs(req);
   return request<AnalogsResponse>("/analogs", { method: "POST", body: JSON.stringify(req) });
 }
 
-export function twins(srcTileId: string, earthTileId: string): Promise<TwinsResponse> {
-  if (!isLive()) return Promise.resolve(mockTwins(srcTileId, earthTileId));
+export async function twins(
+  srcTileId: string,
+  earthTileId: string,
+  siteId?: string,
+): Promise<TwinsResponse> {
+  if (siteId) {
+    const exported = await fromStatic<TwinsResponse>(
+      `/data/twins/${siteId}__${earthTileId}.json`,
+    );
+    if (exported) return exported;
+  }
+  if (!isLive()) return mockTwins(srcTileId, earthTileId);
   const q = new URLSearchParams({ src_tile_id: srcTileId, earth_tile_id: earthTileId });
   return request<TwinsResponse>(`/twins?${q}`);
 }

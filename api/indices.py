@@ -24,12 +24,16 @@ BODIES = ("moon", "earth")
 KNOWN_RADIUS_KM = 150.0
 
 
-def _annotate_known(meta: pd.DataFrame) -> pd.DataFrame:
+def annotate_known(meta: pd.DataFrame) -> pd.DataFrame:
     """Tag Earth tiles that sit on a well-studied analog site.
 
     Same 150 km rule as `analog.known_analog_name`, but vectorised over the
     whole grid: tiles left as None are the *new* candidates the challenge asks
     for, and `/analogs?new_only=true` filters on this column.
+
+    `scripts/03_export.py` imports this so the static export and the API agree
+    on which tiles count as "known". It belongs in `analogatlas/` proper once
+    `analog.py` is free (#12, #20).
     """
     names = np.full(len(meta), None, dtype=object)
     best = np.full(len(meta), np.inf)
@@ -59,7 +63,7 @@ def load_all() -> dict[str, BodyIndex]:
                 f"{body} index is inconsistent: meta={len(idx.meta)} "
                 f"shade={len(idx.shade)} img={len(idx.img)}")
         if body == "earth":
-            idx.meta = _annotate_known(idx.meta)
+            idx.meta = annotate_known(idx.meta)
         elif "known_analog" not in idx.meta:
             idx.meta = idx.meta.assign(known_analog=None)
         out[body] = idx

@@ -37,7 +37,8 @@ export function Atlas() {
     setBusy(true);
     setError(null);
     api
-      .analogs({ src_body: site.body, lat: site.lat, lon: site.lon, k: 12, new_only: newOnly })
+      .analogs({ src_body: site.body, lat: site.lat, lon: site.lon, k: 12, new_only: newOnly },
+                site.id)
       .then(setAnalogs)
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(false));
@@ -46,10 +47,10 @@ export function Atlas() {
   useEffect(() => {
     if (!analogs || !tileId) return setCard(null);
     api
-      .twins(analogs.src_tile.tile_id, tileId)
+      .twins(analogs.src_tile.tile_id, tileId, siteId ?? undefined)
       .then(setCard)
       .catch((e: Error) => setError(e.message));
-  }, [analogs, tileId]);
+  }, [analogs, tileId, siteId]);
 
   const update = (next: Record<string, string | null>) => {
     const merged = new URLSearchParams(params);

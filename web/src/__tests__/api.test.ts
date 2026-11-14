@@ -45,6 +45,53 @@ describe("mock mode (no VITE_API_BASE)", () => {
   });
 });
 
+describe("static export is preferred when a site id is known", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  const exportedAnalogs = {
+    site_id: "tycho-crater",
+    src_tile: { tile_id: "moon_6_53_60", lat: -43.31, lon: -11.36 },
+    results: [{
+      tile_id: "earth_+35.03_-111.02", lat: 35.03, lon: -111.02, score: 0.71,
+      visual_cos_scaled: 0.88, physical: 0.6, known_analog: null, tile_url: "",
+    }],
+  };
+
+  it("reads analogs from the export instead of calling the API", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((url) =>
+      Promise.resolve(
+        String(url).endsWith("/data/analogs/tycho-crater.json")
+          ? (new Response(JSON.stringify(exportedAnalogs), { status: 200 }) as Response)
+          : (new Response("not found", { status: 404 }) as Response),
+      ),
+    );
+    const out = await api.analogs(
+      { src_body: "moon", lat: -43.31, lon: -11.36 }, "tycho-crater");
+    expect(out.src_tile.tile_id).toBe("moon_6_53_60");
+    expect(fetchMock).toHaveBeenCalledWith("/data/analogs/tycho-crater.json");
+  });
+
+  it("falls back when that site has not been exported", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("not found", { status: 404 }) as Response,
+    );
+    // A Moon base region is deliberately not exported: it is outside the index.
+    const out = await api.analogs({ src_body: "moon", lat: -89.67, lon: 129.78 }, "shackleton-rim");
+    expect(out.results.length).toBeGreaterThan(0);   // mock fallback, app still runs
+  });
+
+  it("reads the report card from the export, keyed by site and tile", async () => {
+    const card = { site_id: "tycho-crater", moon: {}, earth: {}, climate: null, breakdown: [] };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(card), { status: 200 }) as Response,
+    );
+    const out = await api.twins("moon_6_53_60", "earth_+35.03_-111.02", "tycho-crater");
+    expect(out.climate).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/data/twins/tycho-crater__earth_+35.03_-111.02.json");
+  });
+});
+
 describe("sites()", () => {
   beforeEach(() => vi.restoreAllMocks());
 
