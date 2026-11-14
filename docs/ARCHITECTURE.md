@@ -238,15 +238,9 @@ Slope and relief are comparable across bodies **by construction**: LOLA LDEM_16 
  "climate": {"TS_MIN": -55.2, "TS_MAX": 8.1, "PRECTOTCORR": 0.02, "ALLSKY_SFC_SW_DWN": 3.1},
  "breakdown": [
    {"dimension": "Median slope", "moon": "4.7°", "earth": "5.1°", "match": 0.91,
-<<<<<<< Updated upstream
-    "note": "LOLA vs Copernicus DEM, both ~1.9 km/px"},
-   {"dimension": "Atmosphere", "moon": "vacuum", "earth": "1 bar", "match": 0.0,
-    "note": "Cannot be reproduced on Earth"}
-=======
-    "note": "LOLA vs ETOPO, both ~1.9 km/px", "kind": "compare"},
+    "note": "LOLA vs Copernicus DEM, both ~1.9 km/px", "kind": "compare"},
    {"dimension": "Atmosphere", "moon": "vacuum (trace exosphere)", "earth": "1 bar at sea level",
     "match": 0.0, "note": "No air: no convective cooling and no wind. ...", "kind": "earth_limit"}
->>>>>>> Stashed changes
  ]}
 ```
 `breakdown` rows come straight from `analog.breakdown()`. Each row has a `kind`:

@@ -15,12 +15,8 @@ from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analogatlas import config as C, rasters  # noqa: E402
-<<<<<<< Updated upstream
-from analogatlas.embed import embed_images, normalize_shade  # noqa: E402
-=======
 from analogatlas.analog import write_order_stamp  # noqa: E402
-from analogatlas.embed import embed_images  # noqa: E402
->>>>>>> Stashed changes
+from analogatlas.embed import embed_images, normalize_shade  # noqa: E402
 from analogatlas.tiles import tile_path  # noqa: E402
 
 BATCH = 64
@@ -60,11 +56,8 @@ for body in sys.argv[1:] or ["moon", "earth"]:
 
     np.save(C.INDEX / f"{body}_shade.npy", embed_all([tile_path(body, "shade", t) for t in grid.tile_id], True))
     np.save(C.INDEX / f"{body}_img.npy", embed_all([tile_path(body, "img", t) for t in grid.tile_id], False))
-<<<<<<< Updated upstream
     assert len(np.load(C.INDEX / f"{body}_shade.npy")) == len(np.load(C.INDEX / f"{body}_img.npy")) == len(meta)
-=======
     # meta and both matrices were built from the same `grid` order; record it so
     # load_index() can refuse a re-sorted meta later (issue #12)
     write_order_stamp(body, meta)
->>>>>>> Stashed changes
     print(f"{body}: done")
