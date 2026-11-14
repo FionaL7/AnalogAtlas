@@ -1,8 +1,11 @@
 # AnalogAtlas
 
-Search engine for planetary analogs, built for the NASA Space Apps challenge on terrestrial analogs.
+Search engine for planetary analogs, built for the NASA Space Apps 2026 challenge [*Identify Earth Locations that Analog the Permanent Moon Base Locations and Mars*](https://www.spaceappschallenge.org/2026/challenges/permanent-moon-base-locations-and-mars/).
 
-Plan and current status for the team: [docs/PLAN.md](docs/PLAN.md).
+- Challenge brief (verbatim): [docs/BRIEF.md](docs/BRIEF.md)
+- Requirements analysis: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)
+- Data resources: [docs/RESOURCES.md](docs/RESOURCES.md)
+- Plan, status and open decisions: [docs/PLAN.md](docs/PLAN.md)
 
 * **Find terrain on the Moon**: describe an Earth landscape in words (or upload a photo) and get the matching lunar terrain.
 * **Earth analogs for a lunar site**: rank every land tile on Earth by similarity to a lunar site, then show a report card of where the analogy holds and where it breaks down.
@@ -10,12 +13,31 @@ Plan and current status for the team: [docs/PLAN.md](docs/PLAN.md).
 
 ## Run
 
+### Linux / macOS
+
 ```bash
-source .venv/bin/activate          # or: uv venv --python 3.12 && uv pip install -r requirements.txt
-python scripts/01_tiles.py         # build grids + download tiles  (~5.4k Moon, ~11.7k Earth)
-python scripts/02_features.py      # DEM/Diviner stats + CLIP embeddings
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install -r requirements.txt
+python scripts/01_tiles.py moon    # build the grid + download tiles (~5.4k Moon tiles)
+python scripts/02_features.py moon # DEM/Diviner stats + CLIP embeddings
+# "earth" runs the GIBS + ETOPO fallback (~11.7k tiles); the main Earth path is moving to Earth Engine
 # search API (FastAPI) and React frontend: not built yet
 ```
+
+### Windows
+
+In PowerShell:
+
+```powershell
+uv venv --python 3.12
+.venv\Scripts\Activate.ps1
+uv pip install -r requirements.txt
+python scripts\01_tiles.py moon
+python scripts\02_features.py moon
+```
+
+On the first run, PyTorch uses CUDA if you have an NVIDIA GPU and the CPU otherwise. If HTTPS downloads fail with a certificate error, see the Windows setup notes in [docs/PLAN.md](docs/PLAN.md#windows).
 
 The raw rasters go in `data/raw/`. They are downloaded once:
 
