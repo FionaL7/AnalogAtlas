@@ -30,6 +30,16 @@ describe("mock mode (no VITE_API_BASE)", () => {
     }
   });
 
+  it("never labels a well-studied site as a new candidate", async () => {
+    // "new, unrecognized analog" is the claim the project is judged on, so the
+    // demo must not badge McMurdo Dry Valleys as new - it did, when the mock
+    // assigned known_analog by list position instead of by location.
+    const out = await api.analogs({ src_body: "moon", lat: -89.5, lon: 0, k: 20 });
+    const mcmurdo = out.results.find((r) => r.tile_id === "earth_-77.50_+162.00");
+    expect(mcmurdo?.known_analog).toBe("McMurdo Dry Valleys, Antarctica");
+    expect(out.results.some((r) => r.known_analog === null)).toBe(true);
+  });
+
   it("drops known analog sites when new_only is set", async () => {
     const out = await api.analogs({ src_body: "moon", lat: -89.5, lon: 0, k: 6, new_only: true });
     expect(out.results.length).toBeGreaterThan(0);

@@ -49,23 +49,48 @@ export function mockSearch(req: SearchRequest): SearchResponse {
   };
 }
 
+/**
+ * Candidate locations, each with the label the API would give it.
+ *
+ * A tile's `known_analog` depends on *where it is* - `analog.known_analog_name`
+ * tags anything within 150 km of a well-studied site. The mock used to assign
+ * the label by list position, which put "new" on the tile at 77.50°S 162.00°E:
+ * McMurdo Dry Valleys, one of the most studied analog sites on Earth. Since
+ * "new, unrecognized analog" is the claim this project is judged on, the mock
+ * must not get that backwards. Coordinates here are real, and the known ones
+ * carry the same names as KNOWN_EARTH_ANALOGS in analogatlas/sites.py.
+ */
+const MOCK_CANDIDATES: Array<[number, number, string | null]> = [
+  [-77.50, 162.00, "McMurdo Dry Valleys, Antarctica"],
+  [75.38, -89.68, "Haughton Crater, Devon Island, Canada"],
+  [-24.08, -69.92, "Atacama Desert (Yungay), Chile"],
+  // Unstudied terrain, spread over real land so the map does not render a
+  // straight line of dots through the Southern Ocean.
+  [21.00, 17.50, null],    // Tibesti, Chad
+  [-21.20, 119.40, null],  // Pilbara, Australia
+  [37.50, 94.00, null],    // Qaidam Basin, China
+  [31.77, -113.50, null],  // Pinacate, Mexico
+  [-24.70, 15.30, null],   // Namib, Namibia
+  [14.24, 40.30, null],    // Danakil, Ethiopia
+  [29.57, 35.42, null],    // Wadi Rum, Jordan
+  [43.42, -113.52, null],  // Craters of the Moon, Idaho
+  [-30.30, 139.30, null],  // Arkaroola, Australia
+  [19.98, 76.51, null],    // Lonar, India
+  [64.90, -16.80, null],   // Askja, Iceland
+];
+
 export function mockAnalogs(req: AnalogsRequest): AnalogsResponse {
   const k = req.k ?? 12;
-  const known = [null, "McMurdo Dry Valleys, Antarctica", null, "Haughton Crater, Devon Island, Canada"];
-  const results = Array.from({ length: k + 2 }, (_, i) => {
-    const lat = -77.5 + i * 3.1;
-    const lon = 162 - i * 4.3;
-    return {
-      tile_id: earthTile(lat, lon),
-      lat: Number(lat.toFixed(2)),
-      lon: Number(lon.toFixed(2)),
-      score: Number((0.74 - i * 0.02).toFixed(3)),
-      visual_cos_scaled: Number(Math.max(0.05, 0.97 - i * 0.04).toFixed(3)),
-      physical: Number(Math.max(0.05, 0.81 - i * 0.05).toFixed(3)),
-      known_analog: known[i % known.length],
-      tile_url: `/mock-tile.svg`,
-    };
-  });
+  const results = MOCK_CANDIDATES.map(([lat, lon, known], i) => ({
+    tile_id: earthTile(lat, lon),
+    lat,
+    lon,
+    score: Number((0.74 - i * 0.02).toFixed(3)),
+    visual_cos_scaled: Number(Math.max(0.05, 0.97 - i * 0.04).toFixed(3)),
+    physical: Number(Math.max(0.05, 0.81 - i * 0.05).toFixed(3)),
+    known_analog: known,
+    tile_url: `/mock-tile.svg`,
+  }));
   return {
     src_tile: { tile_id: "moon_6_0_90", lat: req.lat, lon: req.lon },
     results: (req.new_only ? results.filter((r) => r.known_analog === null) : results).slice(0, k),
