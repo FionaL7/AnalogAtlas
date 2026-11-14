@@ -59,7 +59,7 @@ Free-text search *cannot* be static: "smooth flat dark lava plains" has to becom
 
 | Flow | Needs the API? | Why |
 | --- | --- | --- |
-| Preset Moon/Mars site → Earth analogs | No, precomputed | ~11 presets × top 200 Earth tiles is a small JSON |
+| Preset Moon/Mars site → Earth analogs | No, precomputed | ~21 presets (`MOON_BASE_REGIONS` + `MOON_SITES`) × top 200 Earth tiles is a small JSON |
 | Report card for a precomputed pair | No, precomputed | Climate is baked in at export time (see §4) |
 | Free-text query | **Yes** | CLIP text encoder |
 | Image upload | **Yes** | CLIP image encoder |
@@ -190,7 +190,7 @@ Slope and relief are comparable across bodies **by construction**: LOLA LDEM_16 
 
 | File | Content |
 | --- | --- |
-| `sites.json` | Moon/Mars presets and known Earth analogs from [`sites.py`](../analogatlas/sites.py): id, body, name, lat/lon, blurb, Trek tile URL |
+| `sites.json` | Targets and known Earth analogs from [`sites.py`](../analogatlas/sites.py) — `MOON_BASE_REGIONS` (the Artemis candidate regions, the ones that answer "permanent Moon base"), `MOON_SITES`, `EARTH_PRESETS`, `KNOWN_EARTH_ANALOGS`: id, body, name, lat/lon, blurb, Trek tile URL. See [TARGET-SITES.md](TARGET-SITES.md) |
 | `dimensions.json` | Dimension ids, labels, notes, and which ones are "Earth can't reproduce" |
 | `tiles/{body}.json` | Per-tile geometry + features for the map layer: `tile_id, lat, lon, bbox, slope_med, relief_km`, and `known_analog` on Earth |
 | `analogs/{site_id}.json` | Precomputed top ~200 Earth analogs for one preset: `tile_id, score, visual_cos_scaled, physical, known_analog` |
