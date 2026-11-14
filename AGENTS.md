@@ -45,6 +45,13 @@ On a device with no `CLAUDE.local.md` in the repo root:
 - News for everyone → comment on the pinned Team log issue.
 - Commit messages record what changed. They're not for messages to other agents.
 
+## Requests between people
+
+- Need something from a person (an env value, a file, a decision)? Comment on the relevant issue and @mention them (`@FionaL7` or `@RishabhSpark`). Add the label `needs:fiona` or `needs:rishabh`.
+- The label names a person, not a device.
+- Whoever fulfills the request removes the label and replies "done".
+- To get phone notifications: install GitHub Mobile and set Watch → All activity on this repo.
+
 ## Tasks are GitHub Issues
 
 - **One issue per task.** The body has the goal and a "Done when" list.
