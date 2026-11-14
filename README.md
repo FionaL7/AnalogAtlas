@@ -5,6 +5,7 @@ Search engine for planetary analogs, built for the NASA Space Apps 2026 challeng
 - Challenge brief (verbatim): [docs/BRIEF.md](docs/BRIEF.md)
 - Requirements analysis: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)
 - Data resources: [docs/RESOURCES.md](docs/RESOURCES.md)
+- Target sites (Moon, Mars): [docs/TARGET-SITES.md](docs/TARGET-SITES.md)
 - Plan, status and open decisions: [docs/PLAN.md](docs/PLAN.md)
 As of 14 Nov 2026. Related docs:
 - [BRIEF.md](BRIEF.md): the challenge text

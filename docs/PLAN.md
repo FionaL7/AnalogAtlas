@@ -5,6 +5,7 @@ As of 14 Nov 2026. Related docs:
 - [REQUIREMENTS.md](REQUIREMENTS.md): requirements and the submission checklist
 - [RESOURCES.md](RESOURCES.md): data sources
 - [ARCHITECTURE.md](ARCHITECTURE.md): stack, pages, API/data contract, repo layout
+- [TARGET-SITES.md](TARGET-SITES.md): the Moon and Mars sites we find analogs for
 
 ## Overview
 
