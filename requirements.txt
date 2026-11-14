@@ -16,3 +16,7 @@ scikit-learn
 tqdm
 matplotlib
 ipykernel
+fastapi
+uvicorn[standard]
+pytest
+httpx

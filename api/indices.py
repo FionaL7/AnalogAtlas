@@ -1,0 +1,106 @@
+"""Index loading and lookup for the API.
+
+The service holds one `BodyIndex` per body in memory for its whole life (~35 MB
+for Moon + Earth, see ARCHITECTURE.md §4.1). A body whose index files are not on
+disk is simply absent, and requests for it return 503 rather than crashing the
+app — this device may only have the Moon index, and the static export (§4.2)
+covers the demo path either way.
+"""
+from __future__ import annotations
+
+import logging
+
+import numpy as np
+import pandas as pd
+from fastapi import HTTPException, Request
+
+from analogatlas import config as C
+from analogatlas.analog import BodyIndex, haversine_deg, load_index
+from analogatlas.sites import KNOWN_EARTH_ANALOGS
+
+log = logging.getLogger("analogatlas.api")
+
+BODIES = ("moon", "earth")
+KNOWN_RADIUS_KM = 150.0
+
+
+def _annotate_known(meta: pd.DataFrame) -> pd.DataFrame:
+    """Tag Earth tiles that sit on a well-studied analog site.
+
+    Same 150 km rule as `analog.known_analog_name`, but vectorised over the
+    whole grid: tiles left as None are the *new* candidates the challenge asks
+    for, and `/analogs?new_only=true` filters on this column.
+    """
+    names = np.full(len(meta), None, dtype=object)
+    best = np.full(len(meta), np.inf)
+    lat, lon = meta.lat.values, meta.lon.values
+    for name, (la, lo) in KNOWN_EARTH_ANALOGS.items():
+        d_km = haversine_deg(lat, lon, la, lo) * C.EARTH_KM_PER_DEG
+        closer = (d_km < KNOWN_RADIUS_KM) & (d_km < best)
+        best = np.where(closer, d_km, best)
+        names[closer] = name
+    meta = meta.copy()
+    meta["known_analog"] = names
+    return meta
+
+
+def load_all() -> dict[str, BodyIndex]:
+    out: dict[str, BodyIndex] = {}
+    for body in BODIES:
+        if not (C.INDEX / f"{body}_meta.parquet").exists():
+            log.warning("no index for %s in %s - its endpoints will return 503", body, C.INDEX)
+            continue
+        idx = load_index(body)
+        # Row order between the parquet and the two .npy files is the contract
+        # (ARCHITECTURE.md §4.1) and a silent mismatch produces wrong analogs,
+        # so refuse to serve it. Issue #12 moves this into load_index itself.
+        if not len(idx.meta) == len(idx.shade) == len(idx.img):
+            raise RuntimeError(
+                f"{body} index is inconsistent: meta={len(idx.meta)} "
+                f"shade={len(idx.shade)} img={len(idx.img)}")
+        if body == "earth":
+            idx.meta = _annotate_known(idx.meta)
+        elif "known_analog" not in idx.meta:
+            idx.meta = idx.meta.assign(known_analog=None)
+        out[body] = idx
+        log.info("loaded %s index: %d tiles", body, len(idx.meta))
+    return out
+
+
+def get_index(request: Request, body: str) -> BodyIndex:
+    if body not in BODIES:
+        raise HTTPException(400, f"unknown body {body!r}; expected one of {list(BODIES)}")
+    idx = request.app.state.indices.get(body)
+    if idx is None:
+        raise HTTPException(503, f"the {body} index is not loaded on this server")
+    return idx
+
+
+def other_body(body: str) -> str:
+    return "earth" if body == "moon" else "moon"
+
+
+def row_by_tile_id(idx: BodyIndex, tile_id: str) -> int:
+    hit = np.flatnonzero(idx.meta.tile_id.values == tile_id)
+    if not len(hit):
+        raise HTTPException(404, f"unknown tile_id {tile_id!r}")
+    return int(hit[0])
+
+
+def json_scalar(v):
+    """NumPy/pandas scalar -> something JSON can hold."""
+    if v is None or (np.isscalar(v) and pd.isna(v)):
+        return None
+    if isinstance(v, (np.integer,)):
+        return int(v)
+    if isinstance(v, (np.floating, float)):
+        return None if not np.isfinite(v) else float(v)
+    if isinstance(v, (np.bool_,)):
+        return bool(v)
+    return v if isinstance(v, (str, int, bool)) else str(v)
+
+
+def row_dict(idx: BodyIndex, i: int, columns: list[str] | None = None) -> dict:
+    row = idx.meta.iloc[i]
+    keys = columns or [c for c in idx.meta.columns if c not in ("z", "y", "x")]
+    return {k: json_scalar(row[k]) for k in keys if k in row}
