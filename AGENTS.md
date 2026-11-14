@@ -85,7 +85,8 @@ If a task, requirement or decision is unclear, ask a human before acting. If oth
 
 ## Git
 
-- Work on a branch per task, or push small changes straight to `main`.
+- **Don't commit or push without asking first.** Ask every time, unless the user instructs otherwise in the current session, or a local `CLAUDE.local.md` overrides it.
+- Work on a branch per task, or push small changes straight to `main` once asked.
 - No large pushes to `main`. Pull before you push.
 - `data/` and `.venv/` are not in git.
 
