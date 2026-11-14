@@ -10,6 +10,7 @@ rasterio
 xarray
 netCDF4
 global-land-mask
+earthengine-api
 requests
 scikit-learn
 tqdm
