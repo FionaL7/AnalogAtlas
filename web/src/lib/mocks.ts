@@ -16,11 +16,13 @@ import type {
 
 /** A few presets from analogatlas/sites.py, including Artemis base regions. */
 export const MOCK_SITES: Site[] = [
-  { id: "shackleton-rim", body: "moon", name: "Shackleton rim", lat: -89.67, lon: 129.78,
+  // Base regions are all poleward of 80°S, so they belong to `moon_polar` and
+  // are drawn in the polar pane -- not to `moon`, whose grid cannot hold them.
+  { id: "shackleton-rim", body: "moon_polar", name: "Shackleton rim", lat: -89.67, lon: 129.78,
     is_base_region: true, blurb: "Classic base concept: near-permanent sunlight on the rim, cold traps below." },
-  { id: "mons-mouton", body: "moon", name: "Mons Mouton Plateau", lat: -84.6, lon: 31.0,
+  { id: "mons-mouton", body: "moon_polar", name: "Mons Mouton Plateau", lat: -84.6, lon: 31.0,
     is_base_region: true, blurb: "Artemis candidate region; a broad, comparatively flat plateau." },
-  { id: "haworth", body: "moon", name: "Haworth", lat: -87.45, lon: -5.17, is_base_region: true },
+  { id: "haworth", body: "moon_polar", name: "Haworth", lat: -87.45, lon: -5.17, is_base_region: true },
   { id: "apollo-15", body: "moon", name: "Apollo 15 — Hadley Rille", lat: 26.13, lon: 3.63,
     blurb: "Mare surface cut by a sinuous rille, against the Apennine front." },
   { id: "tycho", body: "moon", name: "Tycho crater", lat: -43.31, lon: -11.36 },
@@ -32,17 +34,25 @@ const earthTile = (lat: number, lon: number) =>
 
 export function mockSearch(req: SearchRequest): SearchResponse {
   const k = req.k ?? 12;
+  const lunar = req.body !== "earth";
   return {
     results: Array.from({ length: k }, (_, i) => {
-      const lat = req.body === "moon" ? -12.3 + i * 2.8 : -24.1 + i * 0.77;
+      // polar hits must stay inside 75-90°S or they fall outside the pane
+      const lat =
+        req.body === "moon_polar" ? -89.5 + i * 1.1
+        : req.body === "moon" ? -12.3 + i * 2.8
+        : -24.1 + i * 0.77;
       const lon = 45 - i * 2.8;
-      const tile_id = req.body === "moon" ? `moon_6_${12 + i}_${34 + i}` : earthTile(lat, lon);
+      const tile_id =
+        req.body === "moon_polar" ? `moonsp_${3 + (i % 5)}_${4 + Math.floor(i / 5)}`
+        : req.body === "moon" ? `moon_6_${12 + i}_${34 + i}`
+        : earthTile(lat, lon);
       return {
         tile_id,
         lat: Number(lat.toFixed(2)),
         lon: Number(lon.toFixed(2)),
         score: Number((0.82 - i * 0.015).toFixed(3)),
-        known_analog: req.body === "earth" && i === 2 ? "Atacama Desert (Yungay), Chile" : null,
+        known_analog: !lunar && i === 2 ? "Atacama Desert (Yungay), Chile" : null,
         tile_url: `/mock-tile.svg`,
       };
     }),
@@ -92,12 +102,35 @@ export function mockAnalogs(req: AnalogsRequest): AnalogsResponse {
     tile_url: `/mock-tile.svg`,
   }));
   return {
-    src_tile: { tile_id: "moon_6_0_90", lat: req.lat, lon: req.lon },
+    src_tile: {
+      tile_id: req.src_body === "moon_polar" ? "moonsp_5_5" : "moon_6_0_90",
+      lat: req.lat,
+      lon: req.lon,
+    },
     results: (req.new_only ? results.filter((r) => r.known_analog === null) : results).slice(0, k),
   };
 }
 
+/** The rows only the polar index can fill (#26), for the mocked report card. */
+const POLAR_ROWS: TwinsResponse["breakdown"] = [
+  { dimension: "Sunlight availability", moon: "90% of the time", earth: "~50% of the year",
+    match: 0.2, kind: "compare",
+    note: "Moon: LOLA illumination model over 18.6 years, best-lit point in the tile. " +
+          "Earth sits near 50% at every latitude because it rotates daily, so a " +
+          "near-permanently-lit ridge is the one thing no Earth site reproduces" },
+  { dimension: "Longest continuous darkness", moon: "permanent inside a PSR; ~14 Earth days elsewhere",
+    earth: "123 days of polar night", match: 0.03, kind: "compare",
+    note: "Earth figure is geometric polar night, ignoring refraction and terrain" },
+  { dimension: "Permanent shadow", moon: "18.2% of the tile",
+    earth: "no permanent shadow at this scale", match: null, kind: "no_equivalent",
+    note: "LOLA-modelled permanently shadowed regions" },
+  { dimension: "Direct-to-Earth comms", moon: "26% of the time", earth: "always available",
+    match: null, kind: "no_equivalent",
+    note: "A south polar base can lose line of sight to Earth entirely" },
+];
+
 export function mockTwins(src_tile_id: string, earth_tile_id: string): TwinsResponse {
+  const polar = src_tile_id.startsWith("moonsp_");
   return {
     moon: { tile_id: src_tile_id, lat: -89.5, lon: 0, slope_med: 4.7, relief_km: 1.2, t_min_k: 50 },
     earth: { tile_id: earth_tile_id, lat: -77.5, lon: 162, slope_med: 5.1, relief_km: 1.0,
@@ -115,8 +148,16 @@ export function mockTwins(src_tile_id: string, earth_tile_id: string): TwinsResp
         note: "Moon: modelled from latitude, not measured. Earth: NASA POWER skin temperature" },
       { dimension: "Dryness", moon: "no liquid water", earth: "0.02 mm/day", match: 0.96,
         kind: "compare", note: "NASA POWER precipitation; hyper-arid < 0.1 mm/day" },
-      { dimension: "Surface rock cover", moon: "0.8%", earth: "no global Earth equivalent",
-        match: null, kind: "no_equivalent", note: "Diviner rock abundance - landing-hazard proxy" },
+      // Diviner's cylindrical products stop at ±60°, so the polar index has no
+      // rock abundance -- the row is absent there rather than faked.
+      ...(polar
+        ? POLAR_ROWS
+        : [{
+            dimension: "Surface rock cover", moon: "0.8%",
+            earth: "no global Earth equivalent", match: null,
+            kind: "no_equivalent" as const,
+            note: "Diviner rock abundance - landing-hazard proxy",
+          }]),
       { dimension: "Atmosphere", moon: "vacuum (trace exosphere)", earth: "1 bar at sea level",
         match: 0, kind: "earth_limit",
         note: "No air: no convective cooling and no wind. Dust, thermal and EVA tests behave differently" },

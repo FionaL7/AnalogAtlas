@@ -7,8 +7,9 @@ results near one of these are tagged "known"; everything else is a candidate
 MOON_SITES: presets for the "find Earth analogs for this lunar site" view.
 
 MOON_BASE_REGIONS: NASA's Artemis candidate landing regions, plus Shackleton.
-All are poleward of 80 S, OUTSIDE the current Moon index (60 S to 60 N), so
-don't pass them to nearest_tile() until the polar index exists.
+All are poleward of 80 S, so they belong to the `moon_polar` index, NOT to
+`moon` (60 S to 60 N). Passing them to nearest_tile() on the `moon` index
+would clamp to the index edge and answer for a place ~25 deg away.
 Coordinates are the IAU/USGS gazetteer centre of the named feature each region
 sits on or near; regions are ~15x15 km. Source table: docs/TARGET-SITES.md.
 """

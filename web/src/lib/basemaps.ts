@@ -26,6 +26,17 @@ export const BASEMAPS: Record<Body, Basemap> = {
     maxNativeZoom: 8,
     attribution: "LROC WAC mosaic: NASA/GSFC/ASU, via NASA Moon Trek",
   },
+  moon_polar: {
+    kind: "xyz",
+    // LOLA polar hillshade via Trek's south polar tile tree
+    // (config.MOON_SP_LAYERS["shade"]). There is no WAC polar mosaic, and the
+    // pole is half in genuine shadow, so hillshade is the honest basemap here.
+    url:
+      "https://trek.nasa.gov/tiles/Moon/SP/LRO_LOLA_Shade_SPole75_30mp_v04/1.0.0/" +
+      "default/default028mm/{z}/{y}/{x}.png",
+    maxNativeZoom: 6,
+    attribution: "LOLA polar hillshade: NASA/GSFC/MIT, via NASA Moon Trek",
+  },
   earth: {
     kind: "wms",
     // Blue Marble via NASA GIBS WMS (config.GIBS_WMS, config.EARTH_LAYERS["img"])

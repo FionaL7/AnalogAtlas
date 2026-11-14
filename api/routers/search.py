@@ -47,7 +47,14 @@ def _image_vector(image_b64: str) -> np.ndarray:
 def post_search(req: SearchRequest, request: Request) -> SearchResponse:
     idx = get_index(request, req.body)
     vec = _text_vector(req.query) if req.query else _image_vector(req.image_b64)
-    hits = search(idx, vec, k=req.k, w_shade=req.w_shade)
+    w_shade = req.w_shade
+    if "has_img" in idx.meta and not idx.meta.has_img.all():
+        # At the pole the NAC mosaic covers only 85.5-90 S and much of the
+        # ground is in genuine darkness, so imagery cannot carry a query
+        # there. Rank on hillshade alone rather than on black pixels (#26) --
+        # the same channel `cross_body` already uses for visual similarity.
+        w_shade = 1.0
+    hits = search(idx, vec, k=req.k, w_shade=w_shade)
     return SearchResponse(results=[
         SearchHit(tile_id=r.tile_id, lat=float(r.lat), lon=float(r.lon),
                   score=float(r.score), known_analog=json_scalar(r.known_analog),

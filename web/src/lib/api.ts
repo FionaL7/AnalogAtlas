@@ -9,6 +9,7 @@ import { MOCK_SITES, mockAnalogs, mockSearch, mockTwins } from "./mocks";
 import type {
   AnalogsRequest,
   AnalogsResponse,
+  Body,
   SearchRequest,
   SearchResponse,
   Site,
@@ -89,7 +90,7 @@ export async function twins(
  * The full tile grid for one body, for the map's background layer. Static
  * export only (03_export.py); until it has run there is no grid, just results.
  */
-export async function tiles(body: "moon" | "earth"): Promise<TileCell[]> {
+export async function tiles(body: Body): Promise<TileCell[]> {
   return (await fromStatic<TileCell[]>(`/data/tiles/${body}.json`)) ?? [];
 }
 

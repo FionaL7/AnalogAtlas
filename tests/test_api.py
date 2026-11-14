@@ -14,11 +14,12 @@ from analogatlas import config as C
 from .conftest import write_index
 
 
-def test_health_reports_both_bodies(client):
+def test_health_reports_every_body(client):
     body = client.get("/health").json()
     assert body["status"] == "ok"
-    assert set(body["bodies"]) == {"moon", "earth"}
+    assert set(body["bodies"]) == {"moon", "moon_polar", "earth"}
     assert body["bodies"]["moon"] > 0
+    assert body["bodies"]["moon_polar"] > 0
 
 
 # ------------------------------------------------------------------ search --

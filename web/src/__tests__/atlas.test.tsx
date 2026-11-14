@@ -11,9 +11,17 @@ import type { MapPaneProps } from "../components/map/MapPane";
 
 // jsdom has no canvas, so Leaflet itself can't run here. Stub the lazily
 // loaded map with its props visible; the real map is checked in a browser.
+// Labels must match LeafletMap's BODY_LABEL, or the pane assertions below
+// stop meaning anything.
+const BODY_LABEL: Record<string, string> = {
+  moon: "Moon",
+  moon_polar: "Moon south pole",
+  earth: "Earth",
+};
+
 vi.mock("../components/map/LeafletMap", () => ({
   default: ({ body, markers }: MapPaneProps) => (
-    <div role="region" aria-label={`${body === "moon" ? "Moon" : "Earth"} map`}>
+    <div role="region" aria-label={`${BODY_LABEL[body]} map`}>
       {markers.length} markers
     </div>
   ),
@@ -37,14 +45,17 @@ describe("Atlas", () => {
     await waitFor(() => expect(screen.getByText(/12 candidates/)).toBeInTheDocument());
     expect(screen.getAllByText("new").length).toBeGreaterThan(0);
 
-    // Two panes: the Moon site as the source, its Earth analogs on the other map.
-    expect(await screen.findByRole("region", { name: "Moon map" })).toHaveTextContent("1 markers");
+    // Two panes: the Moon site as the source, its Earth analogs on the other
+    // map. Shackleton is an Artemis base region at 89.7°S, so it belongs to
+    // `moon_polar` and must open the polar pane, not the lat/lon Moon one (#26).
+    expect(await screen.findByRole("region", { name: "Moon south pole map" }))
+      .toHaveTextContent("1 markers");
     expect(screen.getByRole("region", { name: "Earth map" })).toHaveTextContent("12 markers");
 
-    // Earth is always the left pane, the Moon always the right one, whichever
-    // body the search starts from.
+    // Earth is always the left pane, the lunar body always the right one,
+    // whichever body the search starts from.
     expect(screen.getAllByRole("region").map((r) => r.getAttribute("aria-label")))
-      .toEqual(["Earth map", "Moon map"]);
+      .toEqual(["Earth map", "Moon south pole map"]);
 
     const first = screen.getByRole("button", { name: /77\.50°S/ });
     await user.click(first);

@@ -16,48 +16,78 @@ import { CircleMarker, MapContainer, TileLayer, Tooltip, WMSTileLayer, useMap } 
 import { BASEMAPS } from "../../lib/basemaps";
 import { percent } from "../../lib/format";
 import { LEGEND_TICKS, scoreColour } from "../../lib/palette";
-import type { TileCell } from "../../lib/types";
+import { CRS_MOON_SOUTH_POLAR, polarCellCorners } from "../../lib/polar";
+import { isPolar, type Body, type TileCell } from "../../lib/types";
 import type { MapMarker, MapPaneProps } from "./MapPane";
 
 const WORLD = L.latLngBounds([-90, -180], [90, 180]);
 
+const BODY_LABEL: Record<Body, string> = {
+  moon: "Moon",
+  moon_polar: "Moon south pole",
+  earth: "Earth",
+};
+
 /** The full tile grid as faint outlines. Imperative, on one canvas: ~12k
- * rectangles as React components would re-reconcile on every render. */
-function GridLayer({ cells }: { cells: TileCell[] }) {
+ * rectangles as React components would re-reconcile on every render.
+ *
+ * Polar cells are squares in projected metres, not lat/lon boxes, so they are
+ * drawn as polygons through their four corners — a rectangle would be wrong.
+ */
+function GridLayer({ cells, polar }: { cells: TileCell[]; polar: boolean }) {
   const map = useMap();
   useEffect(() => {
     if (!cells.length) return;
     const renderer = L.canvas({ padding: 0.5 });
+    const style = {
+      renderer,
+      weight: 0.5,
+      color: "#ffffff",
+      opacity: 0.12,
+      fill: false,
+      interactive: false,
+    };
     const group = L.layerGroup(
       cells.map((c) =>
-        L.rectangle(
-          [[c.bbox[1], c.bbox[0]], [c.bbox[3], c.bbox[2]]],
-          { renderer, weight: 0.5, color: "#ffffff", opacity: 0.12, fill: false, interactive: false },
-        ),
+        polar && c.xy
+          ? L.polygon(polarCellCorners(c.xy), style)
+          : L.rectangle([[c.bbox[1], c.bbox[0]], [c.bbox[3], c.bbox[2]]], style),
       ),
     );
     group.addTo(map);
     return () => {
       group.remove();
     };
-  }, [map, cells]);
+  }, [map, cells, polar]);
   return null;
 }
 
 /** Re-frame when the results or the focus point change, not on every render. */
-function Framing({ markers, focus }: { markers: MapMarker[]; focus?: MapPaneProps["focus"] }) {
+function Framing({
+  markers,
+  focus,
+  polar,
+}: {
+  markers: MapMarker[];
+  focus?: MapPaneProps["focus"];
+  polar: boolean;
+}) {
   const map = useMap();
   const key = markers.map((m) => m.tile_id).join(",");
   const flat = focus?.lat;
   const flon = focus?.lon;
   useEffect(() => {
     if (flat !== undefined && flon !== undefined) {
-      map.setView([flat, flon], 3);
+      map.setView([flat, flon], polar ? 4 : 3);
     } else if (markers.length) {
-      map.fitBounds(L.latLngBounds(markers.map((m) => [m.lat, m.lon])).pad(0.3), { maxZoom: 4 });
+      map.fitBounds(L.latLngBounds(markers.map((m) => [m.lat, m.lon])).pad(0.3), {
+        maxZoom: polar ? 5 : 4,
+      });
+    } else if (polar) {
+      map.setView([-90, 0], 2);
     }
     // `markers` is tracked through `key` on purpose: same tiles, no re-frame.
-  }, [map, key, flat, flon]);
+  }, [map, key, flat, flon, polar]);
   return null;
 }
 
@@ -83,35 +113,43 @@ function Legend() {
 export default function LeafletMap({ body, markers, selected, onSelect, grid, focus }: MapPaneProps) {
   const base = BASEMAPS[body];
   const scored = markers.some((m) => m.weight !== undefined);
+  const polar = isPolar(body);
+  // No tile `bounds` on the polar pane. Leaflet derives the valid-tile box by
+  // projecting the NW and SE corners of a lat/lon rectangle, which collapses
+  // to a sliver under a polar projection and hides almost every tile. The
+  // layer 404s outside its own footprint anyway, which is the correct limit.
+  const bounds = polar ? undefined : WORLD;
 
   return (
     <div
       role="region"
-      aria-label={`${body === "moon" ? "Moon" : "Earth"} map`}
+      aria-label={`${BODY_LABEL[body]} map`}
       className="relative h-full min-h-[18rem] overflow-hidden rounded-lg border border-edge"
     >
       <MapContainer
-        crs={L.CRS.EPSG4326}
-        center={[0, 0]}
-        zoom={1}
-        minZoom={0}
+        // The pole needs its own projection, not a different view of the same
+        // one — see lib/polar.ts.
+        crs={polar ? CRS_MOON_SOUTH_POLAR : L.CRS.EPSG4326}
+        center={polar ? [-90, 0] : [0, 0]}
+        zoom={polar ? 2 : 1}
+        minZoom={polar ? 1 : 0}
         maxZoom={base.maxNativeZoom + 2}
-        maxBounds={WORLD}
+        maxBounds={polar ? undefined : WORLD}
         maxBoundsViscosity={1}
         preferCanvas
         className="h-full w-full"
         style={{ background: "var(--color-base)" }}
       >
         {base.kind === "xyz" ? (
-          <TileLayer url={base.url} maxNativeZoom={base.maxNativeZoom} noWrap bounds={WORLD}
+          <TileLayer url={base.url} maxNativeZoom={base.maxNativeZoom} noWrap bounds={bounds}
                      attribution={base.attribution} />
         ) : (
-          <WMSTileLayer url={base.url} maxNativeZoom={base.maxNativeZoom} noWrap bounds={WORLD}
+          <WMSTileLayer url={base.url} maxNativeZoom={base.maxNativeZoom} noWrap bounds={bounds}
                         attribution={base.attribution}
                         params={{ layers: base.layers ?? "", format: "image/jpeg", version: "1.3.0" }} />
         )}
 
-        {grid && <GridLayer cells={grid} />}
+        {grid && <GridLayer cells={grid} polar={polar} />}
 
         {markers.map((m) => {
           const isSelected = m.tile_id === selected;
@@ -139,7 +177,7 @@ export default function LeafletMap({ body, markers, selected, onSelect, grid, fo
           );
         })}
 
-        <Framing markers={markers} focus={focus} />
+        <Framing markers={markers} focus={focus} polar={polar} />
       </MapContainer>
 
       {scored && <Legend />}

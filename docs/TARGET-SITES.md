@@ -34,7 +34,23 @@ What these sites share:
 - Steep slopes, a hazard for mobility.
 - Cold traps that can hold water ice and other volatiles.
 
-**Gap:** all of these are outside our Moon index, which stops at 60°S. See the south-pole decision in [PLAN.md](PLAN.md#open-decisions).
+**Covered.** All ten are in the `moon_polar` index (75–90°S, south polar stereographic, 89 tiles of ~85 km). Each lands inside a cell, worst case 40 km from its centre. Built by `scripts/01_tiles.py moon_polar` then `scripts/02_features.py moon_polar` ([#26](https://github.com/FionaL7/AnalogAtlas/issues/26)).
+
+What the index measures for each region, beyond slope and relief — these are the dimensions a base is actually sited on:
+
+| Region | Slope | Relief | Permanent shadow | Illumination avg/max | Earth visibility |
+|---|---|---|---|---|---|
+| Shackleton rim | 7.7° | 5.30 km | 18.2% | 15.3 / **89.6%** | 26.1% |
+| Nobile Rim 1–2 | 9.4° | 9.23 km | 13.7% | 17.0 / 85.8% | 21.5% |
+| Haworth / Malapert Massif | 8.3° | 7.84 km | 23.5% | 10.5 / 84.5% | 28.6% |
+| Mons Mouton (+ Plateau) | 8.6° | 7.16 km | 2.8% | 29.3 / 62.5% | **59.9%** |
+| de Gerlache Rim 2 | 4.6° | 2.80 km | 8.0% | 21.8 / 78.5% | 29.9% |
+| Slater Plain | 6.5° | 4.44 km | 19.7% | 17.4 / 68.2% | 24.2% |
+| Peak near Cabeus B | 6.9° | 4.37 km | 9.3% | 26.3 / 58.7% | 53.7% |
+
+This is a validation result, not just a data dump: the pipeline independently reproduces why these regions were picked. Shackleton's rim comes out as the best-lit point in the index, and Mons Mouton Plateau has the most Earth visibility and the least permanent shadow, matching "flat plateau with long sunlit periods".
+
+Note the 85 km tiles are coarser than the ~15 × 15 km regions, so Haworth and Malapert Massif (≈50 km apart) share a cell, as do the two Nobile Rim sites and the two Mons Mouton entries.
 
 **To check:** USGS has a data release of [Artemis III candidate landing site navigational grids](https://www.usgs.gov/data/down-selected-artemis-iii-candidate-landing-site-navigational-grids) (DOI 10.5066/P1MEQ6UK). It may contain the region outlines. It needs a browser to download.
 

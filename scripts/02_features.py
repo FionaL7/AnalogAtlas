@@ -1,7 +1,8 @@
 """Step 2: physical statistics + CLIP embeddings for every downloaded tile.
 
-    python scripts/02_features.py            # both bodies
+    python scripts/02_features.py            # every body
     python scripts/02_features.py earth      # one body
+    python scripts/02_features.py moon_polar # the south pole (#26)
     python scripts/02_features.py earth --meta-only   # redo features, keep embeddings
 
 Writes data/index/{body}_meta.parquet, {body}_shade.npy, {body}_img.npy
@@ -44,20 +45,37 @@ def embed_all(paths, shade):
     return np.concatenate(out).astype(np.float16)
 
 
+PHYSICAL = {"moon": rasters.moon_physical, "moon_polar": rasters.moon_polar_physical,
+            "earth": rasters.earth_physical}
+
+
+def has_content(paths, min_frac=0.05):
+    """Whether a chip carries real imagery rather than empty shadow/no-data.
+
+    The LROC NAC polar mosaic covers only 85.5-90 S, and much of the pole is
+    in genuine darkness, so many polar chips are blank. Flagging them lets
+    free-text search skip them instead of matching on black.
+    """
+    return [bool((np.asarray(Image.open(p).convert("L")) > 8).mean() >= min_frac) for p in paths]
+
+
 args = sys.argv[1:]
 meta_only = "--meta-only" in args
-for body in [a for a in args if not a.startswith("--")] or ["moon", "earth"]:
+for body in [a for a in args if not a.startswith("--")] or list(PHYSICAL):
     grid = pd.read_parquet(C.INDEX / f"{body}_grid.parquet")
     have = grid.tile_id.map(lambda t: tile_path(body, "img", t).exists() and tile_path(body, "shade", t).exists())
     grid = grid[have].reset_index(drop=True)
     print(f"{body}: {len(grid)} tiles with both layers")
 
-    meta = rasters.moon_physical(grid) if body == "moon" else rasters.earth_physical(grid)
+    meta = PHYSICAL[body](grid)
     if body == "earth":
         meta["greenness"], meta["brightness"] = colour_stats([tile_path(body, "img", t) for t in grid.tile_id])
         if C.EE_PROJECT:
             from analogatlas import earth_ee
             meta = pd.concat([meta, earth_ee.environment(grid)], axis=1)
+    if body == "moon_polar":
+        meta["has_img"] = has_content([tile_path(body, "img", t) for t in grid.tile_id])
+        print(f"{body}: {int(meta.has_img.sum())}/{len(meta)} tiles have usable NAC imagery")
     if meta_only:
         old = pd.read_parquet(C.INDEX / f"{body}_meta.parquet")
         assert old.tile_id.tolist() == meta.tile_id.tolist(), "tile set changed: run without --meta-only"

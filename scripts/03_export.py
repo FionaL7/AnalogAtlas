@@ -31,7 +31,7 @@ import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from analogatlas import analog, config as C  # noqa: E402
+from analogatlas import analog, config as C, tiles  # noqa: E402
 from analogatlas.sites import (  # noqa: E402
     EARTH_PRESETS, KNOWN_EARTH_ANALOGS, MOON_BASE_REGIONS, MOON_SITES,
 )
@@ -39,6 +39,9 @@ from api.indices import annotate_known  # noqa: E402  (shared so the export and 
 
 TILE_COLUMNS = ["tile_id", "lat", "lon", "lat_min", "lat_max", "lon_min", "lon_max",
                 "slope_med", "relief_km", "elev_km"]
+# The polar map pane draws in polar stereographic metres, not lat/lon.
+POLAR_TILE_COLUMNS = ["x_m", "y_m", "size_m", "psr_frac", "avg_illum", "illum_max",
+                      "earth_vis"]
 
 
 def slug(name: str) -> str:
@@ -81,19 +84,30 @@ def moon_trek_tile_url(lat: float, lon: float) -> str:
     return C.MOON_LAYERS["img"].format(z=z, y=y, x=x)
 
 
-def build_sites(moon_in_index) -> list[dict]:
+def moon_polar_trek_tile_url(lat: float, lon: float) -> str:
+    """The Trek Moon/SP tile covering a point, at the polar grid's zoom."""
+    x_m, y_m = tiles.sp_forward(lat, lon)
+    tile_m = C.MOON_SP_EXTENT_M / 2 ** C.MOON_SP_ZOOM
+    ox, oy = C.MOON_SP_ORIGIN_M
+    return C.MOON_SP_LAYERS["shade"].format(
+        z=C.MOON_SP_ZOOM, y=int((oy - float(y_m)) // tile_m), x=int((float(x_m) - ox) // tile_m))
+
+
+def build_sites(moon_in_index, polar_in_index) -> list[dict]:
     """Every target and known analog, with ids the frontend routes on.
 
-    Moon base regions are poleward of 80°S while the index stops at 60°S, so
-    they are exported with `in_index: false`. Without that flag `nearest_tile`
-    would quietly clamp to the index edge and we would publish analogs for a
-    place 25° away from the one named. Resolved by #6.
+    Moon base regions are all poleward of 80°S, so they belong to the
+    `moon_polar` index, not `moon` -- the equirectangular grid cannot
+    represent them at all (#26). If the polar index is absent they are still
+    exported, with `in_index: false`, because without that flag
+    `nearest_tile` would quietly clamp to the index edge and we would publish
+    analogs for a place 25° away from the one named.
     """
     out: list[dict] = []
     for name, (lat, lon) in MOON_BASE_REGIONS.items():
-        out.append(dict(id=slug(name), body="moon", name=name, lat=lat, lon=lon,
-                        is_base_region=True, in_index=bool(moon_in_index(lat)),
-                        tile_url=moon_trek_tile_url(lat, lon),
+        out.append(dict(id=slug(name), body="moon_polar", name=name, lat=lat, lon=lon,
+                        is_base_region=True, in_index=bool(polar_in_index(lat)),
+                        tile_url=moon_polar_trek_tile_url(lat, lon),
                         blurb="Artemis candidate landing region."))
     for name, (lat, lon) in MOON_SITES.items():
         out.append(dict(id=slug(name), body="moon", name=name, lat=lat, lon=lon,
@@ -116,13 +130,17 @@ def build_sites(moon_in_index) -> list[dict]:
 
 # ---------------------------------------------------------- dimensions ------
 def build_dimensions(moon: analog.BodyIndex, earth: analog.BodyIndex,
-                     climate: dict | None) -> list[dict]:
+                     climate: dict | None, polar: analog.BodyIndex | None = None) -> list[dict]:
     """Derived from what `analog.breakdown()` actually returns, not hand-listed,
-    so rows added there (#20) appear here without a second list to maintain."""
-    moon_row = moon.meta.iloc[0]
+    so rows added there (#20, #26) appear here without a second list to maintain."""
     earth_row = earth.meta.iloc[0].copy()
     earth_row["visual_cos_scaled"] = 0.5
-    rows = analog.breakdown(moon_row, earth_row, climate)
+    rows = analog.breakdown(moon.meta.iloc[0], earth_row, climate)
+    if polar is not None:
+        # the polar-only dimensions (illumination, permanent shadow, comms)
+        # exist only for a moon_polar row, so collect them from one too
+        polar_rows = analog.breakdown(polar.meta.iloc[0], earth_row, climate)
+        rows = pd.concat([rows, polar_rows]).drop_duplicates(subset="dimension")
     out = []
     for row in rows.itertuples():
         out.append(dict(
@@ -138,7 +156,8 @@ def build_dimensions(moon: analog.BodyIndex, earth: analog.BodyIndex,
 
 # ------------------------------------------------------------- exports ------
 def export_tiles(idx: analog.BodyIndex, body: str, out: Path) -> int:
-    cols = [c for c in TILE_COLUMNS if c in idx.meta.columns]
+    wanted = TILE_COLUMNS + (POLAR_TILE_COLUMNS if body == "moon_polar" else [])
+    cols = [c for c in wanted if c in idx.meta.columns]
     rows = []
     for row in idx.meta[cols + (["known_analog"] if body == "earth" else [])].itertuples(index=False):
         d = row._asdict()
@@ -152,6 +171,13 @@ def export_tiles(idx: analog.BodyIndex, body: str, out: Path) -> int:
         )
         if body == "earth":
             tile["known_analog"] = clean(d.get("known_analog"))
+        if body == "moon_polar":
+            # the polar pane positions tiles in metres from the pole; a
+            # lat/lon bbox is meaningless for the cells containing it
+            tile["xy"] = [clean(d.get("x_m"), 1), clean(d.get("y_m"), 1),
+                          clean(d.get("size_m"), 1)]
+            for c in ("psr_frac", "avg_illum", "illum_max", "earth_vis"):
+                tile[c] = clean(d.get(c), 4)
         rows.append(tile)
     return write_json(out / "tiles" / f"{body}.json", rows)
 
@@ -186,7 +212,7 @@ def export_twins(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
                  with_climate: bool) -> list[str]:
     """Report cards for the pairs the demo opens, climate baked in so judging
     needs no NASA POWER call. Leads with candidates that are not known sites."""
-    if site["body"] != "moon":
+    if site["body"] == "earth":
         return []   # breakdown() is Moon-vs-Earth; reverse pairs are not report cards
     ranked = sorted(results, key=lambda r: r["known_analog"] is not None)[:pairs]
     i = src.nearest_tile(site["lat"], site["lon"])
@@ -241,14 +267,20 @@ def main() -> int:
     # load_index checks row counts and the tile_id order stamp (#12)
     try:
         moon, earth = analog.load_index("moon"), analog.load_index("earth")
+        # The south pole is optional: without it the Artemis regions export
+        # with in_index=false and no analogs, which is the pre-#26 behaviour.
+        polar = (analog.load_index("moon_polar")
+                 if (C.INDEX / "moon_polar_meta.parquet").exists() else None)
     except analog.IndexMismatchError as e:
         sys.exit(f"index is inconsistent: {e} - do not export it")
     earth.meta = annotate_known(earth.meta)
-    print(f"moon: {len(moon.meta)} tiles, earth: {len(earth.meta)} tiles")
+    print(f"moon: {len(moon.meta)} tiles, earth: {len(earth.meta)} tiles, "
+          f"moon_polar: {len(polar.meta) if polar else 0} tiles")
 
     out: Path = args.out
-    in_index = lambda lat: abs(lat) <= C.MOON_MAX_ABS_LAT   # noqa: E731
-    sites = build_sites(in_index)
+    in_index = lambda lat: abs(lat) <= C.MOON_MAX_ABS_LAT                       # noqa: E731
+    polar_in_index = lambda lat: polar is not None and lat <= C.MOON_POLAR_MAX_LAT  # noqa: E731
+    sites = build_sites(in_index, polar_in_index)
     write_json(out / "sites.json", sites)
 
     sample_climate = None
@@ -257,17 +289,23 @@ def main() -> int:
             sample_climate = analog.earth_climate(-24.08, -69.92)   # Atacama
         except (requests.RequestException, KeyError, ValueError) as e:
             print(f"! NASA POWER unavailable, exporting without climate rows: {e}")
-    write_json(out / "dimensions.json", build_dimensions(moon, earth, sample_climate))
+    write_json(out / "dimensions.json", build_dimensions(moon, earth, sample_climate, polar))
 
-    for body, idx in (("moon", moon), ("earth", earth)):
+    bodies = [("moon", moon), ("earth", earth)] + ([("moon_polar", polar)] if polar else [])
+    for body, idx in bodies:
         export_tiles(idx, body, out)
 
+    by_body = {"moon": moon, "moon_polar": polar, "earth": earth}
     cards = 0
     off_index = []
     for site in sites:
         if site.get("is_known_analog"):
             continue        # reference points on the map, not search targets
-        src, dst = (moon, earth) if site["body"] == "moon" else (earth, moon)
+        src = by_body[site["body"]]
+        dst = moon if site["body"] == "earth" else earth
+        if src is None:
+            off_index.append(site)
+            continue
         results = export_analogs(site, src, dst, args.k, out)
         if results is None:
             off_index.append(site)
@@ -286,17 +324,20 @@ def main() -> int:
     print(f"wrote {len(written)} files to {out} - {len(sites)} sites, "
           f"{cards} report cards, {total / 1e6:.2f} MB")
 
+    base_done = sum(1 for s in sites
+                    if s.get("is_base_region") and s["in_index"])
+    print(f"{base_done}/{len(MOON_BASE_REGIONS)} Artemis base regions have analogs")
+
     if off_index:
         # The headline finding, not a footnote: these are the sites the
         # challenge title is about, and today we can say nothing about them.
         base = [s["id"] for s in off_index if s["is_base_region"]]
-        print(f"\n! {len(off_index)} sites are outside the index "
-              f"(|lat| > {C.MOON_MAX_ABS_LAT:.0f}°) and got no analogs.")
+        print(f"\n! {len(off_index)} sites are outside the index and got no analogs.")
         if base:
             print(f"! {len(base)} of them are Artemis candidate base regions: "
                   f"{', '.join(base)}")
-            print("! Until the polar index exists (#6), the demo answers "
-                  "'analogs for lunar terrain', not 'for Moon-base sites'.")
+            print("! Build the polar index too (scripts/01_tiles.py moon_polar, "
+                  "then scripts/02_features.py moon_polar) -- see #26.")
     return 0
 
 

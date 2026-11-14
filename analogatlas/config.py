@@ -25,6 +25,27 @@ EARTH_GRID_STEP_DEG = 1.0
 EARTH_MAX_ABS_LAT = 82.0    # ASTER GDEM coverage limit is ~83 deg
 TILE_PX = 256
 
+# ---- Moon south pole (the `moon_polar` body) -------------------------------
+# Past ~60 deg an equirectangular tile stops being square on the ground: at
+# 85 S a 2.8125 deg tile is 6 km wide and 85 km tall, and the imagery comes
+# back as horizontal smear. The pole therefore gets its own index on a south
+# polar stereographic grid -- the same split every lunar mission data set makes
+# (it is also why the Diviner cylindrical products stop at +/-60).
+MOON_POLAR_MAX_LAT = -75.0     # edge of the LOLA/PGDA polar products
+# Trek serves the polar layers from a separate tile tree whose tile matrix set
+# is in metres from the pole, 2^(z+1) x 2^z tiles from the top-left corner.
+TREK_SP = "https://trek.nasa.gov/tiles/Moon/SP"
+MOON_SP_ZOOM = 6                       # 133.8 m/px; a 85 km chip is 638 px
+MOON_SP_ORIGIN_M = (-1_095_930.0, 1_095_930.0)   # top-left (x, y) of the matrix
+MOON_SP_EXTENT_M = 2_191_860.0                   # one tile at zoom 0
+MOON_SP_LAYERS = {
+    # LOLA polar hillshade, 75-90 S. Carries the visual channel at the pole.
+    "shade": f"{TREK_SP}/LRO_LOLA_Shade_SPole75_30mp_v04/1.0.0/default/default028mm/{{z}}/{{y}}/{{x}}.png",
+    # LROC NAC average mosaic. Only 85.5-90 S, and half of the pole is in
+    # genuine shadow, so many chips have no usable imagery -- see `has_img`.
+    "img": f"{TREK_SP}/LRO_NAC_AvgMosaic_SPole855_1mp/1.0.0/default/default028mm/{{z}}/{{y}}/{{x}}.png",
+}
+
 # ---- Endpoints -------------------------------------------------------------
 TREK = "https://trek.nasa.gov/tiles/Moon/EQ"
 MOON_LAYERS = {
@@ -45,6 +66,12 @@ LOLA_DEM = RAW / "ldem_16.img"
 DIVINER_ROCK = RAW / "dgdr_ra_avg_cyl_032_img.img"
 DIVINER_NIGHT_T = RAW / "dgdr_st_avg_cyl_032_img.img"
 ETOPO = RAW / "ETOPO_2022_v1_60s_N90W180_surface.nc"
+# South polar rasters. All four share one grid: south polar stereographic,
+# centred on -90, x/y in metres from the pole, so one reader serves them all.
+LOLA_POLAR_DEM = RAW / "ldem_75s_240m.img"                   # 240 m/px
+LPSR = RAW / "LPSR_75S_120M_201608.IMG"                      # permanent shadow
+AVG_ILLUM = RAW / "AVGVISIB_75S_120M_201608.IMG"             # mean solar illumination
+EARTH_VIS = RAW / "AVGVISIB_75S_120M_201608_EARTH.IMG"       # mean Earth visibility
 
 # ---- Model -----------------------------------------------------------------
 CLIP_ARCH = "ViT-B-32"

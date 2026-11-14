@@ -20,7 +20,10 @@ from analogatlas.sites import KNOWN_EARTH_ANALOGS
 
 log = logging.getLogger("analogatlas.api")
 
-BODIES = ("moon", "earth")
+BODIES = ("moon", "moon_polar", "earth")
+# Every lunar body pairs with Earth and vice versa; `moon_polar` is the south
+# pole on its own polar stereographic grid (#26), not a subset of `moon`.
+EARTH_ANALOG_OF = {"moon": "earth", "moon_polar": "earth", "earth": "moon"}
 KNOWN_RADIUS_KM = 150.0
 
 
@@ -76,7 +79,7 @@ def get_index(request: Request, body: str) -> BodyIndex:
 
 
 def other_body(body: str) -> str:
-    return "earth" if body == "moon" else "moon"
+    return EARTH_ANALOG_OF[body]
 
 
 def row_by_tile_id(idx: BodyIndex, tile_id: str) -> int:

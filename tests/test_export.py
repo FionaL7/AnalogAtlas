@@ -48,15 +48,48 @@ def test_writes_every_file_in_the_contract(exported):
     assert not (exported / "validation.json").exists()
 
 
-def test_moon_base_regions_are_flagged_as_outside_the_index(exported):
-    """The index stops at 60°S; every Artemis region is past 80°S. Publishing
-    analogs for them would mean publishing a tile 25° from the named place."""
+def test_moon_base_regions_are_served_by_the_polar_index(exported):
+    """The whole point of #26: every Artemis region is past 80°S, so it belongs
+    to `moon_polar`, and each one must come back with real Earth analogs."""
     sites = read(exported / "sites.json")
     regions = [s for s in sites if s.get("is_base_region")]
     assert regions, "the Artemis candidate regions must be exported"
-    assert all(s["in_index"] is False for s in regions)
+    assert all(s["body"] == "moon_polar" for s in regions)
+    assert all(s["in_index"] is True for s in regions)
     for site in regions:
-        assert not (exported / "analogs" / f"{site['id']}.json").exists()
+        payload = read(exported / "analogs" / f"{site['id']}.json")
+        assert payload["results"], f"{site['id']} got no analogs"
+        assert all(h["tile_id"].startswith("earth_") for h in payload["results"])
+
+
+def test_base_regions_stay_off_index_without_a_polar_index(index_dir, tmp_path, monkeypatch):
+    """Falling back must mean 'say nothing', never 'clamp to the index edge'
+    and publish analogs for a place 25° from the one named."""
+    for suffix in ("meta.parquet", "shade.npy", "img.npy", "order.json"):
+        (index_dir.path / f"moon_polar_{suffix}").unlink()
+    out = tmp_path / "nopolar"
+    module = load_script()
+    monkeypatch.setattr("sys.argv", ["03_export.py", "--out", str(out), "--no-climate",
+                                     "--k", "12", "--pairs", "2"])
+    assert module.main() == 0
+    regions = [s for s in read(out / "sites.json") if s.get("is_base_region")]
+    assert regions and all(s["in_index"] is False for s in regions)
+    for site in regions:
+        assert not (out / "analogs" / f"{site['id']}.json").exists()
+
+
+def test_polar_tiles_carry_their_projected_geometry_and_dimensions(exported):
+    """The polar pane positions tiles in metres from the pole, and the polar
+    dimensions are what a base is actually sited on."""
+    tiles = read(exported / "tiles" / "moon_polar.json")
+    assert tiles
+    for t in tiles:
+        x, y, size = t["xy"]
+        assert size > 0 and abs(x) < 1e6 and abs(y) < 1e6
+        assert 0.0 <= t["psr_frac"] <= 1.0
+        assert 0.0 <= t["avg_illum"] <= t["illum_max"] <= 1.0
+    ids = {d["id"] for d in read(exported / "dimensions.json")}
+    assert {"sunlight-availability", "permanent-shadow", "direct-to-earth-comms"} <= ids
 
 
 def test_in_index_moon_sites_do_get_analogs(exported):

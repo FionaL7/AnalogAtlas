@@ -26,18 +26,28 @@ export function Atlas() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [grids, setGrids] = useState<Record<Body, TileCell[]>>({ moon: [], earth: [] });
+  const [grids, setGrids] = useState<Record<Body, TileCell[]>>({
+    moon: [],
+    moon_polar: [],
+    earth: [],
+  });
 
   useEffect(() => {
     api.sites().then(setSites);
     // Full grids come from the static export; empty until 03_export.py has run.
-    Promise.all([api.tiles("moon"), api.tiles("earth")]).then(([moon, earth]) =>
-      setGrids({ moon, earth }),
-    );
+    // moon_polar is absent unless the polar index was built (#26), so it must
+    // not take the others down with it.
+    Promise.all([
+      api.tiles("moon"),
+      api.tiles("earth"),
+      api.tiles("moon_polar").catch(() => [] as TileCell[]),
+    ]).then(([moon, earth, moon_polar]) => setGrids({ moon, earth, moon_polar }));
   }, []);
 
   const site = sites.find((s) => s.id === siteId) ?? null;
   const srcBody: Body = site?.body ?? "moon";
+  /** The lunar half of the pairing: `moon`, or `moon_polar` for a base region. */
+  const lunarBody: Body = srcBody === "earth" ? "moon" : srcBody;
 
   useEffect(() => {
     if (!site) return;
@@ -112,9 +122,11 @@ export function Atlas() {
 
         {/* Earth is always the left pane and the Moon always the right one,
             whichever direction the search runs. Which pane shows the picked
-            site and which shows the ranked candidates follows srcBody. */}
+            site and which shows the ranked candidates follows srcBody.
+            The right pane is whichever lunar body is in play: an Artemis base
+            region lives in `moon_polar`, which has its own projection (#26). */}
         <div className="grid gap-4 md:grid-cols-2">
-          {(["earth", "moon"] as Body[]).map((body) => (
+          {(["earth", lunarBody] as Body[]).map((body) => (
             <div key={body} className="h-72 lg:h-[26rem]">
               {body === srcBody ? (
                 <MapPane
@@ -157,7 +169,7 @@ export function Atlas() {
           onSearch={(q) => {
             setBusy(true);
             api
-              .search({ body: "moon", query: q, k: 12 })
+              .search({ body: lunarBody, query: q, k: 12 })
               .then(() => setError(null))
               .catch((e: Error) => setError(e.message))
               .finally(() => setBusy(false));

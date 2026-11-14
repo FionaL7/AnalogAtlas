@@ -48,6 +48,35 @@ def _moon_meta(rng: np.random.Generator) -> pd.DataFrame:
     ))
 
 
+def _moon_polar_meta(rng: np.random.Generator) -> pd.DataFrame:
+    """The south polar body: polar stereographic x/y, plus the polar-only
+    dimensions (illumination, permanent shadow, Earth visibility)."""
+    from analogatlas.tiles import sp_inverse
+
+    step = C.TILE_KM * 1000
+    coords = (np.arange(6) - 2.5) * step
+    xs, ys = (a.ravel() for a in np.meshgrid(coords, coords))
+    lat, lon = sp_inverse(xs, ys)
+    n = len(xs)
+    psr = rng.uniform(0, 0.25, n)
+    return pd.DataFrame(dict(
+        tile_id=[f"moonsp_{i}_{j}" for i in range(6) for j in range(6)],
+        body="moon_polar", x_m=xs, y_m=ys, size_m=step, lat=lat, lon=lon,
+        lat_min=lat - 1.4, lat_max=lat + 1.4, lon_min=lon - 1.4, lon_max=lon + 1.4,
+        elev_km=rng.uniform(-5, 3, n),
+        relief_km=rng.uniform(1.5, 9, n),
+        slope_med=rng.uniform(1, 10, n),
+        slope_p90=rng.uniform(2, 25, n),
+        psr_frac=psr,
+        avg_illum=rng.uniform(0.1, 0.45, n),
+        illum_max=rng.uniform(0.45, 0.92, n),
+        earth_vis=rng.uniform(0, 0.95, n),
+        t_max_k=(1 - psr) * 200.0 + psr * 40.0,
+        t_min_k=(1 - psr) * 50.0 + psr * 30.0,
+        has_img=rng.random(n) < 0.3,
+    ))
+
+
 def _earth_meta(rng: np.random.Generator) -> pd.DataFrame:
     # Spread the rest over open ocean-free longitudes far from any known site.
     lat = np.concatenate([[MCMURDO[0]], rng.uniform(-50, 50, EARTH_TILES - 1)])
@@ -65,13 +94,17 @@ def _earth_meta(rng: np.random.Generator) -> pd.DataFrame:
     ))
 
 
-def write_index(directory, bodies=("moon", "earth"), seed: int = 7) -> dict[str, pd.DataFrame]:
+BUILDERS = {"moon": _moon_meta, "moon_polar": _moon_polar_meta, "earth": _earth_meta}
+
+
+def write_index(directory, bodies=("moon", "moon_polar", "earth"),
+                seed: int = 7) -> dict[str, pd.DataFrame]:
     """Write `{body}_meta.parquet` + the two embedding matrices, row-aligned."""
     rng = np.random.default_rng(seed)
     directory.mkdir(parents=True, exist_ok=True)
     out = {}
     for body in bodies:
-        meta = _moon_meta(rng) if body == "moon" else _earth_meta(rng)
+        meta = BUILDERS[body](rng)
         meta.to_parquet(directory / f"{body}_meta.parquet")
         np.save(directory / f"{body}_shade.npy", _unit(rng, len(meta)))
         np.save(directory / f"{body}_img.npy", _unit(rng, len(meta)))

@@ -2,8 +2,17 @@
  * The API and static-export contract, mirrored from docs/ARCHITECTURE.md §4.2-4.3.
  * Python is the single source of truth for every score; the browser only renders.
  */
-export type Body = "moon" | "earth";
+/** `moon_polar` is the lunar south pole on its own polar stereographic grid
+ *  (#26). It is a separate body, not a subset of `moon`: an equirectangular
+ *  tile at 85°S is 6 km wide and 85 km tall, so the pole cannot be drawn or
+ *  indexed on the same grid. */
+export type Body = "moon" | "moon_polar" | "earth";
 export type Layer = "img" | "shade";
+
+/** Bodies drawn in a polar stereographic pane rather than in lat/lon. */
+export const POLAR_BODIES: readonly Body[] = ["moon_polar"];
+
+export const isPolar = (body: Body): boolean => POLAR_BODIES.includes(body);
 
 export interface SearchRequest {
   body: Body;
@@ -72,11 +81,19 @@ export interface TileCell {
   tile_id: string;
   lat: number;
   lon: number;
-  /** [lon_min, lat_min, lon_max, lat_max] */
+  /** [lon_min, lat_min, lon_max, lat_max]. Meaningless for a polar cell that
+   *  contains the pole itself — use `xy` for those. */
   bbox: [number, number, number, number];
   slope_med: number | null;
   relief_km: number | null;
   known_analog?: string | null;
+  /** moon_polar only: [x_m, y_m, size_m] in south polar stereographic metres. */
+  xy?: [number, number, number];
+  /** moon_polar only: the dimensions a base is actually sited on. */
+  psr_frac?: number | null;
+  avg_illum?: number | null;
+  illum_max?: number | null;
+  earth_vis?: number | null;
 }
 
 /** Static export: sites.json (§4.2). */

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import math
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
@@ -45,6 +46,65 @@ def moon_grid() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# ------------------------------------------------ south polar projection ----
+# Spherical polar stereographic, centred on -90, scale true at the pole. The
+# LOLA/PGDA polar products and Trek's Moon/SP tile tree share this grid, which
+# is checked in tests/test_polar.py against known features (Shackleton reads
+# ~2.5 km below its surroundings, Mons Malapert ~3.9 km above).
+def sp_forward(lat, lon):
+    """Lat/lon in degrees -> (x, y) in metres from the south pole."""
+    rho = 2 * C.MOON_RADIUS_M * np.tan(np.radians(45 + np.asarray(lat, float) / 2))
+    lam = np.radians(np.asarray(lon, float))
+    return rho * np.sin(lam), rho * np.cos(lam)
+
+
+def sp_inverse(x, y):
+    """(x, y) in metres from the south pole -> lat/lon in degrees."""
+    rho = np.hypot(np.asarray(x, float), np.asarray(y, float))
+    lat = np.degrees(2 * np.arctan(rho / (2 * C.MOON_RADIUS_M))) - 90
+    return lat, np.degrees(np.arctan2(x, y))
+
+
+def moon_polar_grid() -> pd.DataFrame:
+    """~85 km square cells on the south polar stereographic grid.
+
+    Square in kilometres everywhere, which is the whole point of the polar
+    grid: the equirectangular grid cannot do this past ~60 deg.
+    """
+    step = C.TILE_KM * 1000
+    r_max = float(sp_forward(C.MOON_POLAR_MAX_LAT, 0.0)[1])
+    n = int(math.ceil(2 * r_max / step))
+    coords = (np.arange(n) - (n - 1) / 2) * step
+    rows = []
+    for yi, y in enumerate(coords):
+        for xi, x in enumerate(coords):
+            # keep the cell if at least half of a 5x5 sub-grid is inside the
+            # product's edge -- the same rule earth_grid uses for land
+            sx = np.linspace(x - step / 2, x + step / 2, 5)
+            sy = np.linspace(y - step / 2, y + step / 2, 5)
+            SX, SY = np.meshgrid(sx, sy)
+            if (np.hypot(SX, SY) <= r_max).mean() < 0.5:
+                continue
+            lat, lon = sp_inverse(x, y)
+            # A lat/lon bbox from the four corners, for callers that still want
+            # one. It is informational: the polar pane positions cells from
+            # x_m/y_m. A cell containing the pole spans every longitude, and
+            # reaches -90 even though none of its corners do.
+            cx, cy = np.meshgrid([x - step / 2, x + step / 2], [y - step / 2, y + step / 2])
+            clat, clon = sp_inverse(cx.ravel(), cy.ravel())
+            spans_pole = bool(np.hypot(cx, cy).min() <= 0 or (cx.min() < 0 < cx.max()
+                                                              and cy.min() < 0 < cy.max()))
+            rows.append(dict(
+                tile_id=f"moonsp_{xi}_{yi}", body="moon_polar",
+                x_m=float(x), y_m=float(y), size_m=float(step),
+                lat=float(lat), lon=float(lon),
+                lat_min=-90.0 if spans_pole else float(clat.min()),
+                lat_max=float(clat.max()),
+                lon_min=-180.0 if spans_pole else float(clon.min()),
+                lon_max=180.0 if spans_pole else float(clon.max())))
+    return pd.DataFrame(rows)
+
+
 def earth_grid() -> pd.DataFrame:
     """Land-only sample points, ~1 deg apart, each with an ~85 km square box."""
     from global_land_mask import globe
@@ -69,26 +129,96 @@ def earth_grid() -> pd.DataFrame:
 
 
 # --------------------------------------------------------------- fetch -----
-def _square_crop(img: Image.Image, lat: float) -> Image.Image:
-    """Equirectangular tiles are stretched E-W by 1/cos(lat); crop the centre so
-    the tile is square in kilometres, then resize back to TILE_PX."""
-    w, h = img.size
-    keep = max(int(round(w * math.cos(math.radians(lat)))), 8)
+def _lon_window_px(lat: float) -> int:
+    """Width, in source pixels, of a TILE_KM-wide window at this latitude.
+
+    An equirectangular tile is TILE_KM tall but only TILE_KM*cos(lat) wide, so
+    a chip that is square in kilometres spans 1/cos(lat) tiles of longitude.
+    """
+    return int(round(C.TILE_PX / max(math.cos(math.radians(lat)), 1e-6)))
+
+
+def _square_chip(strip: Image.Image, lat: float) -> Image.Image:
+    """Cut a chip that is TILE_KM on a side in kilometres from a tile strip.
+
+    The strip is a row of whole tiles centred on the chip's own tile. Taking
+    `_lon_window_px(lat)` pixels of it and resizing to a square *removes* the
+    E-W stretch; cropping to `cos(lat)` of one tile and resizing back up (what
+    this used to do) applies the stretch a second time instead, leaving a
+    ground aspect of cos^2(lat) -- 4x off by 60 deg. See issue #27.
+    """
+    w, h = strip.size
+    keep = min(_lon_window_px(lat), w)
     left = (w - keep) // 2
-    return img.crop((left, 0, left + keep, h)).resize((C.TILE_PX, C.TILE_PX), Image.BILINEAR)
+    return strip.crop((left, 0, left + keep, h)).resize((C.TILE_PX, C.TILE_PX), Image.BILINEAR)
 
 
 def tile_path(body: str, layer: str, tile_id: str):
-    ext = "png" if layer == "shade" else "jpg"
+    # polar imagery is PNG at source; don't round-trip dark NAC tiles via JPEG
+    ext = "png" if layer == "shade" or body == "moon_polar" else "jpg"
     return C.TILES / body / layer / f"{tile_id}.{ext}"
 
 
 def _fetch_moon(s, row, layer):
-    url = C.MOON_LAYERS[layer].format(z=row.z, y=row.y, x=row.x)
-    r = s.get(url, timeout=30)
-    r.raise_for_status()
-    img = Image.open(io.BytesIO(r.content)).convert("L")
-    return _square_crop(img, row.lat)
+    """One chip, mosaicked across longitude so it is square in kilometres."""
+    n = int(math.ceil(_lon_window_px(row.lat) / C.TILE_PX))
+    n += 1 - n % 2                       # odd, so row.x stays in the middle
+    across = 2 ** (row.z + 1)
+    strip = Image.new("L", (n * C.TILE_PX, C.TILE_PX))
+    for i in range(n):
+        url = C.MOON_LAYERS[layer].format(z=row.z, y=row.y, x=(row.x + i - n // 2) % across)
+        r = s.get(url, timeout=30)
+        r.raise_for_status()
+        strip.paste(Image.open(io.BytesIO(r.content)).convert("L"), (i * C.TILE_PX, 0))
+    return _square_chip(strip, row.lat)
+
+
+# Trek's Moon/SP tiles are reused by neighbouring chips, so cache them.
+_SP_CACHE: dict = {}
+_SP_LOCK = threading.Lock()
+
+
+def _sp_px(x_m, y_m, z):
+    """(x, y) in metres -> pixel coordinates in the full Moon/SP mosaic."""
+    mpp = C.MOON_SP_EXTENT_M / 2 ** z / C.TILE_PX
+    ox, oy = C.MOON_SP_ORIGIN_M
+    return (x_m - ox) / mpp, (oy - y_m) / mpp
+
+
+def _sp_tile(s, layer, z, row_i, col_i):
+    """One Moon/SP tile, or None outside the product's footprint."""
+    key = (layer, z, row_i, col_i)
+    with _SP_LOCK:
+        if key in _SP_CACHE:
+            return _SP_CACHE[key]
+    r = s.get(C.MOON_SP_LAYERS[layer].format(z=z, y=row_i, x=col_i), timeout=30)
+    img = Image.open(io.BytesIO(r.content)).convert("L") if r.status_code == 200 else None
+    with _SP_LOCK:
+        _SP_CACHE[key] = img
+    return img
+
+
+def _fetch_moon_polar(s, row, layer):
+    """One polar chip, cut from the Moon/SP tile tree.
+
+    No cos(lat) correction anywhere: the cell is already square in metres on
+    the polar stereographic grid, which is the whole reason the pole has its
+    own projection. Tiles missing at the edge of the product stay black.
+    """
+    z, half = C.MOON_SP_ZOOM, row.size_m / 2
+    px0, py0 = _sp_px(row.x_m - half, row.y_m + half, z)
+    px1, py1 = _sp_px(row.x_m + half, row.y_m - half, z)
+    c0, c1 = int(px0 // C.TILE_PX), int(px1 // C.TILE_PX)
+    r0, r1 = int(py0 // C.TILE_PX), int(py1 // C.TILE_PX)
+    mosaic = Image.new("L", ((c1 - c0 + 1) * C.TILE_PX, (r1 - r0 + 1) * C.TILE_PX))
+    for rr in range(r0, r1 + 1):
+        for cc in range(c0, c1 + 1):
+            t = _sp_tile(s, layer, z, rr, cc)
+            if t is not None:
+                mosaic.paste(t, ((cc - c0) * C.TILE_PX, (rr - r0) * C.TILE_PX))
+    box = (round(px0 - c0 * C.TILE_PX), round(py0 - r0 * C.TILE_PX),
+           round(px1 - c0 * C.TILE_PX), round(py1 - r0 * C.TILE_PX))
+    return mosaic.crop(box).resize((C.TILE_PX, C.TILE_PX), Image.BILINEAR)
 
 
 def _fetch_earth(s, row, layer):
@@ -107,15 +237,21 @@ def _fetch_earth(s, row, layer):
     return img.convert("L" if layer == "shade" else "RGB")
 
 
+FETCHERS = {"moon": _fetch_moon, "moon_polar": _fetch_moon_polar, "earth": _fetch_earth}
+
+
 def fetch_tiles(grid: pd.DataFrame, layers=("img", "shade"), workers: int = 12) -> list[str]:
     """Download every (tile, layer) that is not on disk yet. Returns failures."""
     s = _session()
-    if grid.body.iloc[0] == "earth" and "shade" in layers:
+    body = grid.body.iloc[0]
+    if body == "earth" and "shade" in layers:
         from . import earth_ee
         earth_ee._shade_image()                # initialise EE once, before the threads
+    if body == "moon_polar":
+        workers = min(workers, 4)              # each chip is up to 16 tile requests
     jobs = []
     for layer in layers:
-        (C.TILES / grid.body.iloc[0] / layer).mkdir(parents=True, exist_ok=True)
+        (C.TILES / body / layer).mkdir(parents=True, exist_ok=True)
         for row in grid.itertuples():
             p = tile_path(row.body, layer, row.tile_id)
             if not p.exists():
@@ -123,13 +259,12 @@ def fetch_tiles(grid: pd.DataFrame, layers=("img", "shade"), workers: int = 12) 
 
     def work(job):
         row, layer, p = job
-        fn = _fetch_moon if row.body == "moon" else _fetch_earth
-        fn(s, row, layer).save(p)
+        FETCHERS[row.body](s, row, layer).save(p)
 
     failed = []
     with ThreadPoolExecutor(workers) as ex:
         futs = {ex.submit(work, j): j for j in jobs}
-        for f in tqdm(as_completed(futs), total=len(futs), desc=f"{grid.body.iloc[0]} tiles"):
+        for f in tqdm(as_completed(futs), total=len(futs), desc=f"{body} tiles"):
             if f.exception() is not None:
                 row, layer, _ = futs[f]
                 failed.append(f"{row.tile_id}/{layer}: {f.exception()}")

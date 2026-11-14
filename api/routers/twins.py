@@ -14,7 +14,7 @@ from fastapi import APIRouter, Query, Request
 from analogatlas.analog import breakdown, earth_climate
 
 from ..indices import get_index, json_scalar, row_by_tile_id, row_dict
-from ..schemas import TwinsResponse
+from ..schemas import Body, TwinsResponse
 
 log = logging.getLogger("analogatlas.api")
 router = APIRouter(tags=["twins"])
@@ -25,8 +25,9 @@ def get_twins(
     request: Request,
     src_tile_id: str = Query(..., description="a Moon tile_id"),
     earth_tile_id: str = Query(..., description="an Earth tile_id"),
+    src_body: Body = Query("moon", description="'moon_polar' for the south pole (#26)"),
 ) -> TwinsResponse:
-    moon = get_index(request, "moon")
+    moon = get_index(request, src_body)
     earth = get_index(request, "earth")
     i = row_by_tile_id(moon, src_tile_id)
     j = row_by_tile_id(earth, earth_tile_id)

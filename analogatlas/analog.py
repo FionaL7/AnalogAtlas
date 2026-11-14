@@ -163,6 +163,8 @@ def earth_climate(lat: float, lon: float) -> dict:
 #   earth_limit    no place on Earth can reproduce it; match is always 0
 # The UI groups by `kind`, never by guessing from the score (issue #20).
 MODELLED = "modelled from latitude, not measured"
+POLAR_MODELLED = ("modelled from the tile's shadowed fraction, not measured; "
+                  "a latitude fit does not apply at the pole")
 
 # Fixed rows: what Earth cannot reproduce, whichever tile is chosen. The brief
 # calls recognising these "part of good scientific analysis".
@@ -190,6 +192,10 @@ def breakdown(moon: pd.Series, earth: pd.Series, climate: dict | None) -> pd.Dat
     """Dimension-by-dimension comparison of a lunar tile and an Earth tile.
     Returns rows of (dimension, moon value, earth value, match 0-1, note, kind)."""
     rows = []
+    polar = "psr_frac" in moon and not pd.isna(moon.get("psr_frac"))
+    # Both temperature models are models, but not the same one, and the UI
+    # must not claim the polar numbers came from a latitude fit.
+    modelled = POLAR_MODELLED if polar else MODELLED
 
     def add(dim, mv, ev, match, note, kind="compare"):
         rows.append(dict(dimension=dim, moon=mv, earth=ev,
@@ -200,7 +206,7 @@ def breakdown(moon: pd.Series, earth: pd.Series, climate: dict | None) -> pd.Dat
         "CLIP similarity of hillshade tiles, sun-direction invariant")
     add("Median slope", f"{moon.slope_med:.1f}°", f"{earth.slope_med:.1f}°",
         float(_closeness(earth.slope_med, moon.slope_med, 1.0)),
-        "LOLA vs ETOPO, both ~1.9 km/px")
+        "LOLA vs the Earth DEM, both measured at ~1.9 km/px")
     add("Local relief", f"{moon.relief_km:.2f} km", f"{earth.relief_km:.2f} km",
         float(_closeness(earth.relief_km, moon.relief_km, 1.0)),
         "98th-2nd percentile elevation within ~85 km")
@@ -208,10 +214,10 @@ def breakdown(moon: pd.Series, earth: pd.Series, climate: dict | None) -> pd.Dat
         ts_min, ts_max = climate["TS_MIN"], climate["TS_MAX"]
         swing_e, swing_m = ts_max - ts_min, moon.t_max_k - moon.t_min_k
         add("Surface temperature swing", f"{swing_m:.0f} K", f"{swing_e:.0f} K",
-            swing_e / swing_m, f"Moon: {MODELLED}. Earth: NASA POWER skin temperature")
+            swing_e / swing_m, f"Moon: {modelled}. Earth: NASA POWER skin temperature")
         add("Coldest surface", f"{moon.t_min_k - 273.15:.0f} °C", f"{ts_min:.0f} °C",
             math.exp(-abs((ts_min + 273.15) - moon.t_min_k) / 60),
-            f"Moon: {MODELLED}. Earth: NASA POWER skin temperature")
+            f"Moon: {modelled}. Earth: NASA POWER skin temperature")
         precip = climate["PRECTOTCORR"]
         add("Dryness", "no liquid water", f"{precip:.2f} mm/day", math.exp(-precip / 0.5),
             "NASA POWER precipitation; hyper-arid < 0.1 mm/day")
@@ -220,6 +226,72 @@ def breakdown(moon: pd.Series, earth: pd.Series, climate: dict | None) -> pd.Dat
     if "rock_abundance" in moon and not pd.isna(moon.rock_abundance):
         add("Surface rock cover", f"{moon.rock_abundance * 100:.1f}%", "no global Earth equivalent",
             None, "Diviner rock abundance - landing-hazard proxy", kind="no_equivalent")
+    if polar:
+        rows += _polar_rows(moon, earth)
     for lim in EARTH_LIMITS:
         add(lim["dimension"], lim["moon"], lim["earth"], 0.0, lim["note"], kind="earth_limit")
     return pd.DataFrame(rows)
+
+
+AXIAL_TILT_DEG = 23.44
+EARTH_SUNLIT_FRACTION = 0.5     # annual, at every latitude: Earth rotates daily
+
+
+def polar_night_days(lat: float) -> float:
+    """Length of the continuous polar night at this latitude, in days.
+
+    Geometric, ignoring refraction and terrain. The Sun stays below the
+    horizon while the subsolar latitude is beyond 90 - |lat| in the opposite
+    hemisphere; that holds for a fraction 0.5 - asin(s)/pi of the year, where
+    s = (90 - |lat|) / tilt. Zero outside the polar circles, half a year at
+    the pole itself.
+    """
+    if abs(lat) <= 90 - AXIAL_TILT_DEG:
+        return 0.0
+    s = float(np.clip((90 - abs(lat)) / AXIAL_TILT_DEG, 0.0, 1.0))
+    return 365.25 * (0.5 - math.asin(s) / math.pi)
+
+
+def _polar_rows(moon: pd.Series, earth: pd.Series) -> list[dict]:
+    """Report-card rows that only the south polar index can fill (#26).
+
+    These are the dimensions a permanent base is actually sited on, and each
+    has a real Earth counterpart, which is the point: they compare rather than
+    just assert that the pole is different.
+
+    Temperature is deliberately absent here: `breakdown` already emits the
+    coldest-surface row from `t_min_k`, which the polar index fills from
+    `rasters.polar_temperature_model`. Repeating it would be two rows for one
+    measurement.
+    """
+    rows = []
+
+    def add(dim, mv, ev, match, note, kind="compare"):
+        rows.append(dict(dimension=dim, moon=mv, earth=ev,
+                         match=None if match is None else float(np.clip(match, 0, 1)),
+                         note=note, kind=kind))
+
+    add("Sunlight availability", f"{moon.illum_max * 100:.0f}% of the time",
+        f"~{EARTH_SUNLIT_FRACTION * 100:.0f}% of the year",
+        math.exp(-abs(moon.illum_max - EARTH_SUNLIT_FRACTION) / 0.25),
+        "Moon: LOLA illumination model over 18.6 years, best-lit point in the tile. "
+        "Earth sits near 50% at every latitude because it rotates daily, so a "
+        "near-permanently-lit ridge is the one thing no Earth site reproduces")
+    night = polar_night_days(float(earth.lat))
+    add("Longest continuous darkness",
+        "permanent inside a PSR; ~14 Earth days elsewhere",
+        f"{night:.0f} days of polar night" if night else "none (sun rises daily)",
+        math.exp(-abs(night - 14) / 30) if night else 0.0,
+        "Earth figure is geometric polar night, ignoring refraction and terrain. "
+        "This is where Antarctic and high-Arctic sites earn their place")
+    add("Permanent shadow", f"{moon.psr_frac * 100:.1f}% of the tile",
+        "no permanent shadow at this scale", None,
+        "LOLA-modelled permanently shadowed regions. Earth's axial tilt and "
+        "atmosphere mean nowhere stays sunless year round at 85 km scale",
+        kind="no_equivalent")
+    add("Direct-to-Earth comms", f"{moon.earth_vis * 100:.0f}% of the time",
+        "always available", None,
+        "LOLA Earth-visibility model: a south polar base can lose line of "
+        "sight to Earth entirely, which has no terrestrial equivalent",
+        kind="no_equivalent")
+    return rows

@@ -59,7 +59,18 @@ Download once into `data/raw/`. **Take the `.lbl` label file next to each `.img`
 | `dgdr_st_avg_cyl_032_img.img` + `.lbl` | 84 MB | same directory (regolith temperature anomaly) |
 | `ETOPO_2022_v1_60s_N90W180_surface.nc` | 456 MB | [NOAA NCEI — ETOPO 2022, 60 arc-second](https://www.ngdc.noaa.gov/thredds/fileServer/global/ETOPO2022/60s/60s_surface_elev_netcdf/ETOPO_2022_v1_60s_N90W180_surface.nc) |
 
-Exact filenames are set in [`analogatlas/config.py`](analogatlas/config.py). LOLA LDEM_16 (1.9 km/px) and ETOPO 60s (1.85 km/px) sample at nearly the same resolution, which is what makes slope and relief comparable between the two bodies.
+For the south pole (`moon_polar`, [#26](https://github.com/FionaL7/AnalogAtlas/issues/26)) — all four are PDS3 `.IMG` + `.LBL` on one south polar stereographic grid, so one reader handles them. ~380 MB total:
+
+| File | Size | Source |
+| --- | --- | --- |
+| `ldem_75s_240m.img` + `.lbl` | 29 MB | [PDS Geosciences — LRO LOLA GDR, polar](https://pds-geosciences.wustl.edu/lro/lro-l-lola-3-rdr-v1/lrolol_1xxx/data/lola_gdr/polar/img/) (topography, 240 m/px) |
+| `AVGVISIB_75S_120M_201608.IMG` + `.LBL` | 116 MB | [PGDA — Lunar Polar Illumination](https://pgda.gsfc.nasa.gov/products/69) (mean solar illumination over 18.6 yr) |
+| `LPSR_75S_120M_201608.IMG` + `.LBL` | 116 MB | same (permanently shadowed regions) |
+| `AVGVISIB_75S_120M_201608_EARTH.IMG` + `.LBL` | 116 MB | same (mean Earth visibility, i.e. direct comms) |
+
+The PGDA files download from `imbrium.mit.edu`; the links on the product page are the reliable ones.
+
+Exact filenames are set in [`analogatlas/config.py`](analogatlas/config.py). LOLA LDEM_16 (1.9 km/px) and ETOPO 60s (1.85 km/px) sample at nearly the same resolution, which is what makes slope and relief comparable between the two bodies. The polar DEM is finer (240 m/px) and is block-averaged to 1.92 km before slope is measured, so it lands on the same baseline.
 
 ## Outputs
 
@@ -67,6 +78,8 @@ Exact filenames are set in [`analogatlas/config.py`](analogatlas/config.py). LOL
 
 - `{body}_meta.parquet` — one row per tile: coordinates and physical features
 - `{body}_img.npy`, `{body}_shade.npy` — `(N, 512)` float16 CLIP embeddings, row-aligned with the parquet
+
+`body` is `moon`, `moon_polar` or `earth`. `moon_polar` is the lunar south pole on its own polar stereographic grid: past ~60° an equirectangular tile stops being square on the ground, so the pole cannot share the `moon` grid.
 
 Moon: 5,376 tiles, 5.5 MB per matrix. Earth: ~11.7k tiles, ~12 MB per matrix.
 

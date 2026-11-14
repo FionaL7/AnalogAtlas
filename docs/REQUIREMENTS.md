@@ -17,7 +17,7 @@ Missing any of these means the project is either off-challenge or not eligible f
 | # | Requirement | How we meet it |
 | --- | --- | --- |
 | C1 | Identify and characterize **one or more Earth locations** as analogs | 2–3 new candidate sites from global search, each with a report card |
-| C2 | The analogs are for **candidate permanent Moon-base locations** or **future Mars landing and exploration sites** | Moon-base sites are at the lunar south pole, which our index doesn't cover yet. See the south-pole decision in [PLAN.md](PLAN.md#open-decisions) |
+| C2 | The analogs are for **candidate permanent Moon-base locations** or **future Mars landing and exploration sites** | Covered. All ten Artemis candidate regions are in the `moon_polar` index (75–90°S, polar stereographic) and each returns ranked Earth analogs ([#26](https://github.com/FionaL7/AnalogAtlas/issues/26)). Numbers per region: [TARGET-SITES.md](TARGET-SITES.md) |
 | C3 | Use **open NASA Earth data** together with Moon or Mars data | Earth: ASTER / GIBS, NASA POWER. Moon: LRO (LOLA, Diviner, LROC, Mini-RF) |
 | C4 | Explain **what makes the location analogous** | Report card: dimensions where the analogy holds, with values from both bodies |
 | C5 | Explain **where the analogy breaks down** | Report card: dimensions where it breaks, plus fixed rows for Earth's limits (gravity, vacuum or atmosphere, radiation) |
@@ -82,8 +82,9 @@ How we cover each dimension the brief lists:
 | --- | --- | --- |
 | Geology, mineralogy, surface materials | Partial: Diviner rock abundance on the Moon only | Earth surface material from Sentinel-2 or ASTER bands; lunar basalt vs anorthosite (mare vs highland) |
 | Terrain, elevation, slope, roughness, craters | **Strong:** LOLA slope and relief, CLIP on hillshade, radar roughness planned | Crater counts from the Robbins catalog |
-| Temperature, illumination, environmental extremes | Partial: Diviner temperature anomaly, NASA POWER on Earth | **Illumination** matters most for a polar base: long sunlit periods and permanently shadowed regions |
-| Water, ice, permafrost, resources | None | Polar Diviner cold traps vs Earth permafrost and ice; LEND or Mini-RF ice signatures |
+| Temperature, illumination, environmental extremes | **Strong at the pole:** LOLA mean solar illumination over 18.6 yr (`avg_illum`, `illum_max`) vs Earth's annual sunlit fraction and polar-night length; Diviner temperature anomaly; NASA POWER on Earth | Illumination matters most for a base, and it is the dimension Earth most clearly fails: no Earth site exceeds ~50% annual sunlight, against 90% on the Shackleton rim |
+| Water, ice, permafrost, resources | Partial: `psr_frac` from the LOLA permanent-shadow map — cold traps are where the ice is | Pair PSRs with Earth permafrost explicitly; LEND or Mini-RF ice signatures |
+| Communications and operations | `earth_vis`: fraction of time Earth is in line of sight | Has no Earth equivalent, so it reports as `no_equivalent` rather than a match |
 | Dust, wind, erosion, surface processes | None | Mostly a Mars dimension (dust storms) |
 | Biology, extremophiles, habitability, biosignatures | None | Mars only. Low priority for a Moon-first scope |
 | Caves, lava tubes, subsurface | Weak: two lunar pit presets | Lunar pits vs Earth lava-tube fields; L-band radar (ALOS PALSAR) for the shallow subsurface |

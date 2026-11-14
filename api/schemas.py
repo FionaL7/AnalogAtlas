@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-Body = Literal["moon", "earth"]
+Body = Literal["moon", "moon_polar", "earth"]
 Layer = Literal["img", "shade"]
 
 

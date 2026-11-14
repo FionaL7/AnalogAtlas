@@ -182,6 +182,12 @@ Row order in the two `.npy` files matches `_meta.parquet` exactly. Nothing re-so
 | `rock_abundance` | moon | Diviner GDR L3 | Fractional rock cover; landing-hazard proxy |
 | `regolith_t_anom` | moon | Diviner GDR L3 | Regolith temperature anomaly |
 | `t_max_k`, `t_min_k` | moon | `rasters.lunar_temperature_model` | Modelled surface extremes vs latitude, **not** a direct measurement — say so in the UI |
+| `t_max_k`, `t_min_k` | moon_polar | `rasters.polar_temperature_model` | Shadow-weighted blend of Diviner's cold-trap (<40 K) and sunlit-pole (~200 K) endpoints. The latitude fit **must not** be used here: it returns 0 K at the pole |
+| `x_m`, `y_m`, `size_m` | moon_polar | polar grid | Cell centre and side, in metres from the pole. The polar map pane draws from these, not from lat/lon |
+| `psr_frac` | moon_polar | LOLA `LPSR_75S_120M` | Fraction of the tile in permanent shadow |
+| `avg_illum`, `illum_max` | moon_polar | LOLA `AVGVISIB_75S_120M` | Mean and best solar illumination over 18.6 years. `illum_max` is the siting number — an 85 km average dilutes a lit ridge away |
+| `earth_vis` | moon_polar | LOLA `AVGVISIB_..._EARTH` | Fraction of time Earth is in line of sight, i.e. direct comms |
+| `has_img` | moon_polar | NAC chip | Whether the chip has usable imagery; the NAC polar mosaic covers only 85.5–90°S and much of the pole is genuinely dark |
 | `greenness`, `brightness` | earth | Blue Marble tile | Excess-green index and mean brightness |
 | `lst_day_c`, `lst_night_c`, `lst_hot_c`, `lst_cold_c`, `lst_swing_c` | earth | MODIS LST 2015–24 (Earth Engine) | Surface temperature, °C: day/night mean, hottest day (p95), coldest night (p5), day−night swing |
 | `precip_mm`, `aridity`, `solar_wm2` | earth | TerraClimate 2015–24 | Annual precipitation; precip/PET (capped at 10); mean shortwave. Unreliable in Antarctica |
@@ -189,9 +195,13 @@ Row order in the two `.npy` files matches `_meta.parquet` exactly. Nothing re-so
 | `ice_frac`, `barren_frac`, `sparse_frac`, `veg_frac`, `water_frac`, `urban_frac` | earth | MODIS MCD12Q1 2023 | Land-cover fractions; `sparse_frac` = open shrubland + grassland (desert scrub), `veg_frac` = forest, savanna, crops. `ice_frac` flags ice sheets, which look like smooth lunar plains but aren't rock |
 | `access_min` | earth | Oxford/MAP accessibility 2015 | Travel time to the nearest city, minutes (10th percentile in the tile = its most reachable part). NaN = no data (mostly Antarctica) |
 
+`moon_polar` has no `rock_abundance` or `regolith_t_anom`: the Diviner cylindrical products stop at ±60°. `breakdown()` already guards on the column being present, so those rows are simply absent rather than faked.
+
 Slope and relief are comparable across bodies **by construction**: LOLA LDEM_16 is 1.9 km/px and the Earth DEM (Copernicus GLO-30) is resampled to 1.85 km/px in Earth Engine, so both are measured at the same baseline. This is the sentence to put on the methodology page.
 
-**Scale:** Moon ~5,376 tiles (±60°), Earth ~11.7k land tiles. Embeddings are ~5.5 MB per Moon matrix and ~12 MB per Earth matrix — **~35 MB total**, which fits comfortably in a small container (512 MB is plenty alongside PyTorch).
+**Scale:** Moon ~5,376 tiles (±60°), `moon_polar` 89 tiles (75–90°S), Earth ~11.7k land tiles. Embeddings are ~5.5 MB per Moon matrix, ~90 KB per polar matrix and ~12 MB per Earth matrix — **~35 MB total**, which fits comfortably in a small container (512 MB is plenty alongside PyTorch).
+
+Slope and relief stay comparable across all three: the polar DEM is 240 m/px, block-averaged by 8 to a 1.92 km baseline before slope is measured, against LOLA LDEM_16's 1.9 km and Earth's 1.85 km. `terrain_stats(..., spacing_m=)` is the one implementation all three go through.
 
 ### 4.2 Static export (`web/public/data/`) — produced by `scripts/03_export.py` (to write)
 
@@ -327,7 +337,7 @@ data/              gitignored: raw/ tiles/ index/
 
 ## 8. Open decisions this design assumes
 
-- **South pole (core vs. stretch, see [PLAN.md](PLAN.md#open-decisions)):** the Moon index above is cylindrical, ±60°. If the pole becomes core it adds a separate `moon_polar_*` file set on a polar-stereographic grid — *not* a reprojection of the existing one — plus a second lunar map pane with its own projection and `"moon_polar"` as a `body` value. Everything above is additive under that change; nothing needs rewriting.
+- **South pole: decided core and built** ([#6](https://github.com/FionaL7/AnalogAtlas/issues/6), [#26](https://github.com/FionaL7/AnalogAtlas/issues/26)). The Moon index above is cylindrical, ±60°; the pole is a separate `moon_polar_*` file set on a south polar stereographic grid — *not* a reprojection of the existing one — with `"moon_polar"` as a third `body` value and its own map pane. As predicted, this was purely additive: `cross_body` and `load_index` needed no changes.
 - **How much Mars:** `sites.json` and the `body` field already allow Mars presets; a Mars index would follow the Moon's file pattern exactly.
-- **Map library: decided, Leaflet** (#24). The polar pane, if the pole becomes core, adds proj4leaflet for Trek's polar stereographic tiles.
+- **Map library: decided, Leaflet** (#24). The polar pane uses a custom Leaflet CRS (`web/src/lib/polar.ts`) rather than proj4leaflet — the spherical stereographic forward/inverse is six lines, so two dependencies bought nothing. It mirrors `tiles.sp_forward`/`sp_inverse`, and `web/src/__tests__/polar.test.ts` checks the two agree.
 - **Hosting: decided** ([PLAN.md](PLAN.md#decisions)). Google Cloud on Fiona's Earth Engine project, with the API on Cloud Run. Frontend host and CD pipeline get settled when deploying (#21).

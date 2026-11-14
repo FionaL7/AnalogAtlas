@@ -28,7 +28,7 @@ Scope: the Moon first. How much Mars gets is an [open decision](#open-decisions)
 
 ## Status
 
-The Moon search index (60°S to 60°N) is built and verified. The Earth side, the API and the app haven't been started.
+The Moon search index (60°S to 60°N) is built and verified, and the south pole now has its own index. The Earth side, the API and the app haven't been started.
 
 | Piece | State | Notes |
 | --- | --- | --- |
@@ -36,8 +36,8 @@ The Moon search index (60°S to 60°N) is built and verified. The Earth side, th
 | Moon tiles | Done | 5,376 tiles from 60°S to 60°N, each with an LROC WAC image and a LOLA hillshade |
 | Moon physical features | Done | Slope, relief and elevation (LOLA); rock abundance and regolith-temperature anomaly (Diviner) |
 | Moon CLIP embeddings | Done | 512-d image vectors, plus hillshade vectors averaged over four 90° rotations |
-| Moon south pole (> 60°S) | Not started | **Where candidate Moon-base sites are.** See [open decisions](#open-decisions) |
-| Earth side | In progress | Earth Engine project `analogatlas-ee` (Community tier). Hillshade tiles + slope/relief from Copernicus DEM via `analogatlas/earth_ee.py`; imagery from GIBS Blue Marble |
+| Moon south pole (`moon_polar`) | Done | 89 tiles, 75–90°S, polar stereographic. Adds illumination, permanent shadow and Earth visibility. All ten Artemis regions covered ([#26](https://github.com/FionaL7/AnalogAtlas/issues/26)) |
+| Earth side | In progress | Earth Engine project set in `.env` as `EE_PROJECT` (Community tier). Hillshade tiles + slope/relief from Copernicus DEM via `analogatlas/earth_ee.py`; imagery from GIBS Blue Marble |
 | Search API | Not started | The search logic is in `analogatlas/analog.py`; it needs a FastAPI wrapper |
 | React frontend | Not started | Replaces an earlier Streamlit draft, which has been removed |
 | Radar close study | Not started | Needs RCM or Sentinel-1 scenes and Mini-RF data |
@@ -45,17 +45,21 @@ The Moon search index (60°S to 60°N) is built and verified. The Earth side, th
 
 **Verification.** Three text queries on the Moon index returned the expected terrain, and slopes measured independently from LOLA elevation data agree:
 
-| Query | Top 6 results | Median slope of top 6 |
+| Query | Median slope of top 6 | Before the #27 crop fix |
 | --- | --- | --- |
-| "a large impact crater with a central peak" | Craters, several with central peaks | 4.7° |
-| "smooth flat dark lava plains" | Dark mare with wrinkle ridges | 0.4° |
-| "rugged mountainous highlands" | Rough, heavily cratered highlands | 5.7° |
+| "a large impact crater with a central peak" | 3.3° | 4.7° |
+| "smooth flat dark lava plains" | 0.4° | 0.4° |
+| "rugged mountainous highlands" | **6.5°** | 5.7° |
 
-For comparison, the median slope across all Moon tiles is 3.9°. The ML results agree with independent elevation data, which is the first point to make on the slides.
+For comparison, the median slope across all Moon tiles is 3.9°, unchanged (slope comes from the DEM, not the chips). The ML results agree with independent elevation data, which is the first point to make on the slides.
+
+Rebuilt after [#27](https://github.com/FionaL7/AnalogAtlas/issues/27). "Rugged highlands" separates more sharply from the all-tile median than before, and "smooth plains" is identical. The crater query moved from above the median to below it — at 85 km a large crater is mostly its own flat floor, so this is plausible, but it is a change in behaviour and worth a second look if crater labels land ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)).
 
 ## Challenge fit
 
-Requirements, judging criteria, dimension coverage, things to avoid and the submission checklist are all in [REQUIREMENTS.md](REQUIREMENTS.md). The biggest gap: **"permanent Moon base" means the lunar south pole.** NASA's Artemis candidate landing regions are all near the south pole, and our index stops at 60°S. See [open decisions](#open-decisions).
+Requirements, judging criteria, dimension coverage, things to avoid and the submission checklist are all in [REQUIREMENTS.md](REQUIREMENTS.md).
+
+**"Permanent Moon base" means the lunar south pole**, and that is now covered by the `moon_polar` index ([#26](https://github.com/FionaL7/AnalogAtlas/issues/26)). It carries three dimensions the equatorial index cannot: average solar illumination, permanently shadowed regions, and direct-to-Earth visibility. Those are the strongest answer to "go beyond visual similarity", because they are what a base is actually sited on and each has a real Earth counterpart. Site-by-site numbers: [TARGET-SITES.md](TARGET-SITES.md).
 
 ## Time and team
 
@@ -95,11 +99,15 @@ Put the raw rasters in `data/raw/` first — download URLs, sizes and the `.lbl`
 uv venv --python 3.12
 source .venv/bin/activate
 uv pip install -r requirements.txt
-python scripts/01_tiles.py moon     # ~11k tile requests to NASA Trek
+python scripts/01_tiles.py moon     # ~17k tile requests to NASA Trek
 python scripts/02_features.py moon  # ~5 min on an M1
 
+# South pole (#26). Needs the four polar rasters in data/raw/ (see the README).
+python scripts/01_tiles.py moon_polar     # 89 chips, ~1.5 min
+python scripts/02_features.py moon_polar  # seconds
+
 # Earth side (Earth Engine). Once per machine: earthengine authenticate
-# with a Google account that has access to the project analogatlas-ee.
+# with a Google account that has access to the EE_PROJECT in .env.
 python scripts/00_ee_check.py       # should print "Earth Engine OK"
 python scripts/01_tiles.py earth    # ~11.7k hillshades (EE) + Blue Marble (GIBS)
 python scripts/02_features.py earth
@@ -122,16 +130,18 @@ If HTTPS downloads fail with a certificate error, the Windows certificate store 
 The outputs land in `data/index/`:
 - `moon_meta.parquet`: one row per tile, with coordinates and physical features
 - `moon_img.npy` and `moon_shade.npy`: 5,376 × 512 float16 embeddings, 5.5 MB each
+- `moon_polar_*`: the same three files for the south pole, 89 rows, ~90 KB each
 
-These three files are all the search API needs.
+These are all the search API needs.
 
 ## Next steps
 
 The next milestone is the Earth index. Every Earth–Moon feature in the app depends on it.
 
 - [ ] **Decide hosting (blocking):** pick the hosts, claim the domain, get continuous deployment running so every push redeploys
-- [ ] Decide the south-pole and Mars questions below
-- [x] Register Google Earth Engine (non-commercial use): project `analogatlas-ee`
+- [ ] Decide the Mars question below
+- [x] South pole: decided core (#6), built as `moon_polar` (#26)
+- [x] Register Google Earth Engine (non-commercial use); project id lives in `.env`
 - [ ] Earth pipeline in Earth Engine: tile grid, Copernicus DEM slope and relief, export a table
 - [ ] Earth tile images (ASTER hillshade + imagery) and their CLIP embeddings
 - [ ] FastAPI wrapper around `analogatlas/analog.py` with `/search`, `/analogs`, `/twins`, `/tile`
@@ -153,9 +163,9 @@ The next milestone is the Earth index. Every Earth–Moon feature in the app dep
   - Set up later today, under [#21](https://github.com/FionaL7/AnalogAtlas/issues/21).
   - Still to settle then: frontend host (Firebase Hosting or Vercel) and the CD pipeline.
 
-- **Map library: Leaflet** (react-leaflet), one map per body in EPSG:4326 ([#24](https://github.com/FionaL7/AnalogAtlas/issues/24)). Trek and GIBS tiles are plain lat/lon, which Leaflet renders natively; MapLibre only does Web Mercator or globe. A polar pane (#6) would add proj4leaflet.
+- **Map library: Leaflet** (react-leaflet), one map per body in EPSG:4326 ([#24](https://github.com/FionaL7/AnalogAtlas/issues/24)). Trek and GIBS tiles are plain lat/lon, which Leaflet renders natively; MapLibre only does Web Mercator or globe. The polar pane uses a custom Leaflet CRS in `web/src/lib/polar.ts` — **no proj4leaflet**: the spherical stereographic forward/inverse is six lines and Leaflet takes a custom CRS directly.
+- **South pole: core scope** ([#6](https://github.com/FionaL7/AnalogAtlas/issues/6), built in [#26](https://github.com/FionaL7/AnalogAtlas/issues/26)). It is a separate body, `moon_polar`, on a south polar stereographic grid — not a wider `moon`. Past ~60° an equirectangular tile stops being square on the ground (at 85°S it is 6 km wide and 85 km tall) and the imagery comes back as horizontal smear, so raising `MOON_MAX_ABS_LAT` produces confident nonsense rather than coverage. This is the same split every lunar data set makes, and why the Diviner cylindrical products stop at ±60.
 
 ### Open decisions
 
-- **South pole: stretch goal, or core scope?** The challenge title asks for analogs of *permanent Moon-base locations*. Artemis candidate base sites are all near the lunar south pole, and our index stops at 60°S. Without the pole, the demo answers "Earth analogs for lunar terrain", not "for Moon-base sites". **Recommendation: make it core.** Add polar LOLA and Diviner tiles (polar stereographic, so a separate grid) and the Artemis candidate regions as Moon presets. Compare on the dimensions a base cares about: illumination, cold traps and ice, slope, and Earth permafrost or polar-desert analogs. If we fall behind, cut fine-tuning instead.
 - **How much Mars?** The title gives Mars equal billing ("future Mars landing and exploration sites"). Options: one slide showing the method transfers, or a small Mars index (MOLA plus CTX or THEMIS tiles) with the same search on 2–3 Mars landing sites.
