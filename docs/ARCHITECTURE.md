@@ -84,7 +84,7 @@ This directly answers a requirement: [REQUIREMENTS.md](REQUIREMENTS.md#4-things-
 | State | **Zustand** (app state) + URL query params | Every view is a shareable link: `/atlas?site=shackleton&w_phys=0.3&cell=earth_-77.50_162.00` |
 | Content | **MDX** field guides for the 2–3 close-study sites | The brief explicitly asks us to document findings for a public audience |
 | Tooling | **pnpm**, **Biome** (lint + format), **Vitest**, one **Playwright** smoke test | One tool for lint+format; smoke test guards the demo path |
-| Hosting | **Open — [decide now](PLAN.md#open-decisions)** | Constraints: a static host/CDN for the frontend + export, and a **Python container** host for the API (PyTorch + CLIP). Continuous deployment on both, so every push is testable. Blocks the domain and a stable API URL |
+| Hosting | **Google Cloud** (Fiona's Earth Engine project): API on Cloud Run. Domain: marsneedsmaps.space | [Decided](PLAN.md#decisions). Frontend host and CD pipeline get settled when deploying ([#21](https://github.com/FionaL7/AnalogAtlas/issues/21)) |
 
 ## 3. Pages
 
@@ -317,4 +317,4 @@ data/              gitignored: raw/ tiles/ index/
 - **South pole (core vs. stretch, see [PLAN.md](PLAN.md#open-decisions)):** the Moon index above is cylindrical, ±60°. If the pole becomes core it adds a separate `moon_polar_*` file set on a polar-stereographic grid — *not* a reprojection of the existing one — plus a second lunar map pane with its own projection and `"moon_polar"` as a `body` value. Everything above is additive under that change; nothing needs rewriting.
 - **How much Mars:** `sites.json` and the `body` field already allow Mars presets; a Mars index would follow the Moon's file pattern exactly.
 - **Map library:** MapLibre is the recommendation above (GPU fill layers, globe projection, one instance per body). Leaflet is the fallback if Trek's EPSG:4326 tiles fight MapLibre; the polar pane needs a projection plugin either way.
-- **Hosting: open, and needs deciding now** — it blocks the domain, a stable public API URL and continuous deployment, and we want every push redeployed so changes can be tested for real. Options and trade-offs are in [PLAN.md](PLAN.md#open-decisions). This design asks only two things of whatever we pick: a static host for `web/` plus the export, and a Python container for the API.
+- **Hosting: decided** ([PLAN.md](PLAN.md#decisions)). Google Cloud on Fiona's Earth Engine project, with the API on Cloud Run. Frontend host and CD pipeline get settled when deploying (#21).
