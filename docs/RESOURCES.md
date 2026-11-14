@@ -56,12 +56,13 @@ Free tools for Space Apps participants: [Global Offers](https://www.spaceappscha
 | LOLA LDEM_16 (1.9 km/px) | Moon | PDS Geosciences (LRO) | Slope, relief, elevation | On disk |
 | Diviner GDR L3 rock abundance, regolith temperature anomaly | Moon | PDS Geosciences (Diviner) | Landing hazards, surface material | On disk |
 | LOLA / Diviner polar products | Moon | PDS Geosciences | South pole: illumination, cold traps, slopes | To do |
-| Mini-RF radar (CPR) | Moon | PDS Geosciences (LRO) | Radar roughness close study | To do |
+| Mini-RF global CPR mosaic, 32 ppd (S-band, 12.6 cm) | Moon | [PDS Geosciences, LRO Mini-RF global mosaic](https://pds-geosciences.wustl.edu/lro/lro-l-mrflro-5-global-mosaic-v1/) | Radar roughness (CPR) per site | Downloaded via `scripts/04_radar.py download-minirf` |
+| RCM compact-pol ARD (C-band, 5.6 cm, 30 m) | Earth | [AWS open data, `rcm-ceos-ard`](https://registry.opendata.aws/rcm-ceos-ard/), no account | Radar roughness (CPR) for Canadian candidates (south of ~70N, patchy dates) | `scripts/04_radar.py find-rcm` / `download-rcm` |
+| Sentinel-1 RTC (VV/VH) | Earth | [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc), no account | Radar fallback outside Canada (VH/VV, not CPR) | Confirmed available |
 | Copernicus DEM, Sentinel-1, Sentinel-2 | Earth | Copernicus Data Space or Earth Engine | Slope, radar roughness, imagery | To do |
 | ETOPO 2022 (60″, ~1.85 km/px) | Earth | NOAA NCEI | Slope and relief on the fallback path; same scale as LOLA | Fallback, in code |
 | ASTER GDEM hillshade, Blue Marble | Earth | NASA Worldview / GIBS | Terrain-shape and image embeddings | 2,294 fallback tiles |
 | NASA POWER climatology | Earth | [NASA POWER API](https://power.larc.nasa.gov/) | Temperature, precipitation, irradiance | Live API, nothing to download |
-| RADARSAT Constellation Mission | Earth | CSA open data | Compact-pol radar, the closest match to Mini-RF | To do |
 | ALOS PALSAR | Earth | JAXA G-Portal | L-band radar, shallow subsurface | Optional |
 | Mars maps (MOLA, CTX) | Mars | [USGS Astrogeology: Interactive Maps: Mars](https://astrogeology-usgs.hub.arcgis.com/pages/interactive-maps-mars) | Mars extension | Only if we expand Mars; the page needs a browser to render |
 
