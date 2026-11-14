@@ -4,7 +4,7 @@ As of 14 Nov 2026. Related docs:
 - [BRIEF.md](BRIEF.md): the challenge text
 - [REQUIREMENTS.md](REQUIREMENTS.md): requirements and the submission checklist
 - [RESOURCES.md](RESOURCES.md): data sources
-- [ARCHITECTURE.md](ARCHITECTURE.md): stack, pages, API/data contract, repo layout
+- [ARCHITECTURE.md](ARCHITECTURE.md): stack, pages, API and data contract, repo layout, failure modes
 - [TARGET-SITES.md](TARGET-SITES.md): the Moon and Mars sites we find analogs for
 
 ## Overview
@@ -77,11 +77,11 @@ If we fall behind, cut fine-tuning first. Keep the radar close study: it's our s
 
 ## Architecture
 
-Stack, pages, user flows, the API/data contract and repo layout are in [ARCHITECTURE.md](ARCHITECTURE.md). Short version: the heavy processing runs once, offline, in Python; the React app talks to a thin FastAPI search API that loads a ~15 MB index.
+Stack, pages, user flows, the API/data contract and repo layout are in [ARCHITECTURE.md](ARCHITECTURE.md). Short version: the pipeline runs once, offline, in Python and writes a ~35 MB index. The React app is static-first — the whole demo path is precomputed JSON, so judging doesn't depend on a live server — plus a small FastAPI service for free-text and image search, which need CLIP at request time.
 
 ## Repo
 
-Code: [FionaL7/AnalogAtlas](https://github.com/FionaL7/AnalogAtlas), branch `main`. Repo layout and what each piece does: [ARCHITECTURE.md](ARCHITECTURE.md#repo-layout).
+Code: [FionaL7/AnalogAtlas](https://github.com/FionaL7/AnalogAtlas), branch `main`. Repo layout and what each piece does: [ARCHITECTURE.md](ARCHITECTURE.md#5-repo-layout).
 
 Git ignores `data/` and `.venv/`, so each developer rebuilds them on their own machine.
 
@@ -123,11 +123,13 @@ These three files are all the search API needs.
 
 The next milestone is the Earth index. Every Earth–Moon feature in the app depends on it.
 
+- [ ] **Decide hosting (blocking):** pick the hosts, claim the domain, get continuous deployment running so every push redeploys
 - [ ] Decide the south-pole and Mars questions below
 - [ ] Register Google Earth Engine (non-commercial use) with a Google Cloud project
 - [ ] Earth pipeline in Earth Engine: tile grid, Copernicus DEM slope and relief, export a table
 - [ ] Earth tile images (ASTER hillshade + imagery) and their CLIP embeddings
 - [ ] FastAPI wrapper around `analogatlas/analog.py` with `/search`, `/analogs`, `/twins`, `/tile`
+- [ ] `scripts/03_export.py`: static export of the demo path to `web/public/data/` (see [ARCHITECTURE.md](ARCHITECTURE.md#4-data-contract) §4.2)
 - [ ] React app skeleton against mocked API responses
 - [ ] Run the CSA SAR tutorial on one RCM scene
 - [ ] Download Mini-RF and the polar LOLA / Diviner products
@@ -138,7 +140,7 @@ The next milestone is the Earth index. Every Earth–Moon feature in the app dep
 **Decided:**
 - Moon first
 - React frontend
-- Laptop + Earth Engine + Colab, no paid cloud
+- Laptop + Earth Engine + Colab for the pipeline (no paid compute there)
 - Two developers: Dev A (data and ML), Dev B (app and radar)
 
 ### Open decisions
@@ -146,6 +148,21 @@ The next milestone is the Earth index. Every Earth–Moon feature in the app dep
 - **South pole: stretch goal, or core scope?** The challenge title asks for analogs of *permanent Moon-base locations*. Artemis candidate base sites are all near the lunar south pole, and our index stops at 60°S. Without the pole, the demo answers "Earth analogs for lunar terrain", not "for Moon-base sites". **Recommendation: make it core.** Add polar LOLA and Diviner tiles (polar stereographic, so a separate grid) and the Artemis candidate regions as Moon presets. Compare on the dimensions a base cares about: illumination, cold traps and ice, slope, and Earth permafrost or polar-desert analogs. If we fall behind, cut fine-tuning instead.
 - **How much Mars?** The title gives Mars equal billing ("future Mars landing and exploration sites"). Options: one slide showing the method transfers, or a small Mars index (MOLA plus CTX or THEMIS tiles) with the same search on 2–3 Mars landing sites.
 - **React map library:** MapLibre (one map per body) or Leaflet? Leaflet handles Trek's EPSG:4326 Moon tiles out of the box; the polar tiles would need a separate projection either way.
-- **Hosting:** frontend on Vercel or GitHub Pages; API on Hugging Face Spaces, where the ~15 MB index fits easily. The free domain and cloud credits in the [Global Offers](RESOURCES.md#global-offers-optional-free-tools) are also options.
-- **Sharing large data:** `data/` isn't in git and can reach GBs. Options: a Hugging Face dataset repo, Google Cloud Storage (Global Offer credit), Google Drive, or GitHub Release files (2 GB per file).
-- **Deployment (later):** an agent deploys from a PR, or a CI/CD pipeline.
+- **Hosting — decide now, this is blocking.** We need a domain, a stable public FastAPI URL, and continuous deployment (every push redeployed, so changes can be tested for real). Two separate things to place, with different needs:
+  - *Static frontend + export* (the demo path): any CDN or static host.
+  - *The API*: needs a Python container (PyTorch + CLIP), so plain static or shared hosting can't run it.
+
+  Candidates, and what we know:
+
+  | Option | Static frontend | API | Continuous deployment |
+  | --- | --- | --- | --- |
+  | Google Cloud ($300/90-day [offer](RESOURCES.md#global-offers-optional-free-tools)) | Firebase Hosting | Cloud Run | Good: GitHub Actions with per-PR preview URLs; Cloud Build trigger for the API |
+  | Vercel / GitHub Pages | Yes | No | Vercel: instant, zero-config |
+  | Hugging Face Spaces | — | Yes, free tier fits the ~35 MB index | Git push to deploy |
+  | Porkbun ([offer](RESOURCES.md#global-offers-optional-free-tools)) | Static only | **No** | None — manual upload |
+
+  Notes: Porkbun is a *domain* offer — useful for a memorable URL, not for running the API. **Unverified:** whether the GCP offer needs a payment card (the standard trial does; the offers page is login-gated, so nobody has checked). Whichever we pick, it doesn't change the data contract in [ARCHITECTURE.md](ARCHITECTURE.md#4-data-contract).
+
+  **Recommendation: Hugging Face Spaces (API) + Vercel (frontend) + the Porkbun domain.** Fastest route to CD on both halves — on Spaces a `git push` *is* the deploy, and Vercel gives a preview URL per push — with no payment card anywhere, so the GCP card question stops blocking us. It also avoids rebuilding a ~1–2 GB PyTorch image on every push (5–10 min on Cloud Build), and open_clip pulls the `laion2b_s34b_b79k` weights from the HF hub, so on Spaces that fetch is local. Trade-off: two platforms, and free Spaces sleep after prolonged inactivity — constant pushing keeps it warm during the build, the static export covers judging, and the same container can move to Cloud Run later if we want always-on. GCP then stays what it already has to be: the Earth Engine project, plus a data bucket if we want one.
+- **Sharing large data:** `data/` isn't in git and can reach GBs. Options: a Cloud Storage bucket (if we go GCP), a Hugging Face dataset repo, Google Drive, or GitHub Release files (2 GB per file).
+- **Deployment (later):** an agent deploys from a PR, or a CI/CD pipeline. We want continuous deployment on both halves.
