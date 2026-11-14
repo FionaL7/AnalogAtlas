@@ -61,6 +61,8 @@ class AnalogHit(BaseModel):
     visual_cos_scaled: float = Field(..., description="0-1 percentile of visual similarity")
     physical: float
     known_analog: str | None = None
+    model_score: float | None = Field(
+        None, description="#29 analog model, 0-1 percentile among Earth tiles; null if not trained")
     tile_url: str
 
 
@@ -79,8 +81,29 @@ class BreakdownRow(BaseModel):
         "compare", description="earth_limit rows are what Earth cannot reproduce; group by this")
 
 
+class FieldTest(BaseModel):
+    title: str
+    risk: str
+    detail: str
+    based_on: list[str]
+    strength: float
+
+
+class AvoidNote(BaseModel):
+    dimension: str
+    reason: str
+
+
+class FieldTests(BaseModel):
+    """What to test at this Earth site (C6), from `analogatlas.fieldtest`."""
+    tests: list[FieldTest]
+    avoid: list[AvoidNote]
+
+
 class TwinsResponse(BaseModel):
     moon: dict[str, Any]
     earth: dict[str, Any]
     climate: dict[str, Any] | None
     breakdown: list[BreakdownRow]
+    field_tests: FieldTests | None = None
+    model_score: float | None = None

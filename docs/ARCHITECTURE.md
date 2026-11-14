@@ -90,12 +90,15 @@ This directly answers a requirement: [REQUIREMENTS.md](REQUIREMENTS.md#4-things-
 
 | Route | Purpose |
 | --- | --- |
-| `/` | Landing. Moon globe with the top analog tiles glowing, one-line pitch, CTAs "Explore the Atlas" / "Read the Field Guides" |
-| `/atlas` | **Main explorer.** Left: body + preset-site picker, weight slider (`w_phys`), "new analogs only" toggle, text/image search box. Center: two map panes (Moon source ↔ Earth scores). Right, on tile click: report card — radar vs. target, per-dimension bars, **Holds / Breaks / Earth can't reproduce** lists, nearest known analog, "Compare imagery" |
-| `/atlas/compare` | Synced split view: Earth tile imagery (GIBS) ↔ the Moon target's Trek tile, with a key-numbers table |
-| `/sites/[slug]` | Field guide per close-study site (MDX): the story, radar roughness evidence (Mini-RF vs RCM), what matches, what breaks, how it helps Artemis |
-| `/method` | Methodology: scoring math, the **LOLA slope validation** and precision@k, known-analog ranking check, Earth's limits |
+| `/` | **Atlas, the main explorer.** Three ways in: a preset site, a click anywhere on either map, or a text/picture search (results list, pick one to make it the source). Physical-weight slider (`w_phys`, needs the API), "new candidates only" toggle, lunar map switch (60°S–60°N or south pole). Two map panes: Earth left, Moon right. Report card on a candidate: both tiles side by side (imagery or terrain), per-dimension bars, **Holds / Breaks / Earth can't reproduce**, analog-model percentile, **what to test here**. Lookalike traps for the site below |
+| `/sites` | Field-guide index: every lunar site, base regions first, with illumination, permanent shadow, radar CPR and trap count |
+| `/sites/:id` | Field guide per site: the ground at 85 km (slope, relief, polar dimensions), Mini-RF radar CPR (Earth RCM side pending #19), top 3 new Earth analogs with their field tests, lookalikes to avoid. Built from the static export alone |
+| `/discoveries` | The #29 model's top new candidates (not near any known site), with reasons, on a map; each links to the Atlas to find its lunar match |
+| `/traps` | Lookalike traps (#30): trap rate per lunar body, counts by reason, the strongest examples with image-only vs physics vs model ranks |
+| `/methodology` | Scoring, the LOLA slope validation, **hold-one-out validation** of the analog model from `validation.json`, limitations |
 | `/data` | Data sources, credits, and the AI-tool declaration ([R8](REQUIREMENTS.md#from-the-space-apps-rules) requires this) |
+
+Tile pictures are not shipped: `web/src/lib/chips.ts` rebuilds each 85 km chip in the browser from the same NASA Moon Trek and GIBS services the index was built from (GIBS WMS for Earth; Trek WMTS tiles positioned and clipped for the Moon and the south pole).
 
 ### User flows
 
@@ -203,16 +206,21 @@ Slope and relief are comparable across bodies **by construction**: LOLA LDEM_16 
 
 Slope and relief stay comparable across all three: the polar DEM is 240 m/px, block-averaged by 8 to a 1.92 km baseline before slope is measured, against LOLA LDEM_16's 1.9 km and Earth's 1.85 km. `terrain_stats(..., spacing_m=)` is the one implementation all three go through.
 
-### 4.2 Static export (`web/public/data/`) — produced by `scripts/03_export.py` (to write)
+### 4.2 Static export (`web/public/data/`) — produced by `scripts/03_export.py`
+
+Gitignored. Built at deploy time from `data/index/` (the `data` release), then bundled with the frontend.
 
 | File | Content |
 | --- | --- |
 | `sites.json` | Targets and known Earth analogs from [`sites.py`](../analogatlas/sites.py) — `MOON_BASE_REGIONS` (the Artemis candidate regions, the ones that answer "permanent Moon base"), `MOON_SITES`, `EARTH_PRESETS`, `KNOWN_EARTH_ANALOGS`: id, body, name, lat/lon, blurb, Trek tile URL. See [TARGET-SITES.md](TARGET-SITES.md) |
 | `dimensions.json` | Dimension ids, labels, notes, and which ones are "Earth can't reproduce" |
 | `tiles/{body}.json` | Per-tile geometry + features for the map layer: `tile_id, lat, lon, bbox, slope_med, relief_km`, and `known_analog` on Earth |
-| `analogs/{site_id}.json` | Precomputed top ~200 Earth analogs for one preset: `tile_id, score, visual_cos_scaled, physical, known_analog` |
-| `twins/{site_id}__{tile_id}.json` | Precomputed report card for the pairs the demo opens, **climate baked in** so no NASA POWER call is needed at judging time |
+| `analogs/{site_id}.json` | Precomputed top ~200 Earth analogs for one preset: `tile_id, score, visual_cos_scaled, physical, known_analog, model_score` (#29 percentile, `null` until trained) |
+| `twins/{site_id}__{tile_id}.json` | Precomputed report card for the pairs the demo opens, **climate baked in** so no NASA POWER call is needed at judging time. Also `field_tests` and `model_score`, as in `/twins` |
 | `validation.json` | The LOLA slope check, precision@k, and the percentile at which each known analog ranks for its known role |
+| `traps.json` | **Lookalike traps** (#30): Earth tiles an image-only AI would pick (top hillshade similarity) that fail a physics check. `stats`: per lunar body, `trap_rate` = share of the top-20 lookalikes that are traps, plus counts per reason. `traps`: the strongest, one per Earth tile. `by_site`: traps per preset site. Each trap has `visual_rank` (image-only), `physics_rank` (cross_body: slope/relief only, so it can still rank an ice sheet high), `model_score_pct` (#29 model, environment-aware), and `breakers` with a plain-language `reason` (ice, vegetation, water, wet climate, slope, relief). Built by `analogatlas/traps.py` |
+| `candidates.json` | `{moon, mars, all}`: the #29 model's top new candidates, copied from `data/index/candidates_*.json` (`tile_id, lat, lon, score_pct, why, slope_med, barren_frac, precip_mm, access_min`) |
+| `radar.json` | Mini-RF CPR per lunar site (#17), keyed by site id: `cpr_median, cpr_p90, coverage, n_pixels, box_half_km, source`. From `data/index/moon_site_cpr.json` |
 
 `known_analog` comes from `analog.known_analog_name(lat, lon)` (150 km radius). Tiles where it's `null` are the **new** candidates — what the challenge actually asks for, so the UI leads with them.
 
@@ -241,12 +249,12 @@ Slope and relief stay comparable across all three: the polar DEM is 240 m/px, bl
  "results": [
    {"tile_id": "earth_-77.50_162.00", "lat": -77.5, "lon": 162.0,
     "score": 0.74, "visual_cos_scaled": 0.91, "physical": 0.68,
-    "known_analog": "McMurdo Dry Valleys, Antarctica"}
+    "known_analog": "McMurdo Dry Valleys, Antarctica", "model_score": 0.97}
  ]}
 ```
 `w_phys` weights physical closeness against visual similarity (default 0.3). `score` mixes a standardised visual score with physical closeness, so **it is not a 0–1 similarity** — show `visual_cos_scaled` (a 0–1 percentile) and `physical` in the UI, not the raw `score`.
 
-**`GET /twins?src_tile_id=&earth_tile_id=`** — the report card for one pair.
+**`GET /twins?src_tile_id=&earth_tile_id=&src_body=`** — the report card for one pair. `src_body` is `moon` (default) or `moon_polar`.
 ```json
 {"moon": {"tile_id": "moon_6_0_90", "slope_med": 4.7, "relief_km": 1.2, "t_min_k": 50.0},
  "earth": {"tile_id": "earth_-77.50_162.00", "slope_med": 5.1, "relief_km": 1.0},
@@ -256,8 +264,14 @@ Slope and relief stay comparable across all three: the polar DEM is 240 m/px, bl
     "note": "LOLA vs Copernicus DEM, both ~1.9 km/px", "kind": "compare"},
    {"dimension": "Atmosphere", "moon": "vacuum (trace exosphere)", "earth": "1 bar at sea level",
     "match": 0.0, "note": "No air: no convective cooling and no wind. ...", "kind": "earth_limit"}
- ]}
+ ],
+ "field_tests": {
+   "tests": [{"title": "Rover mobility and traverse planning", "risk": "Getting stuck or tipping on slopes",
+              "detail": "...", "based_on": ["Median slope", "Local relief"], "strength": 0.83}],
+   "avoid": [{"dimension": "Dryness", "reason": "Dryness breaks down here (...)"}]},
+ "model_score": 0.97}
 ```
+`field_tests` answers C6 ("how studying the Earth site helps"). Rules in `analogatlas/fieldtest.py`: each test names the rows it rests on and needs all of them to hold; `avoid` lists compare rows that break down, plus polar caveats.
 `breakdown` rows come straight from `analog.breakdown()`. Each row has a `kind`:
 - `compare`: measured on both bodies; `match` is `0..1`.
 - `no_equivalent`: Moon only (e.g. Diviner rock abundance); `match` is `null`.

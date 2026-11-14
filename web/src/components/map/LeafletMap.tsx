@@ -11,7 +11,9 @@ import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
 import { useEffect } from "react";
-import { CircleMarker, MapContainer, TileLayer, Tooltip, WMSTileLayer, useMap } from "react-leaflet";
+import {
+  CircleMarker, MapContainer, TileLayer, Tooltip, WMSTileLayer, useMap, useMapEvents,
+} from "react-leaflet";
 
 import { BASEMAPS } from "../../lib/basemaps";
 import { percent } from "../../lib/format";
@@ -91,10 +93,19 @@ function Framing({
   return null;
 }
 
-function Legend() {
+/** Map clicks that miss every marker. Markers stop their own clicks from
+ * bubbling, so picking a candidate never also starts a new search. */
+function ClickToSearch({ onMapClick }: { onMapClick: (lat: number, lon: number) => void }) {
+  useMapEvents({
+    click: (e) => onMapClick(e.latlng.lat, ((e.latlng.lng + 540) % 360) - 180),
+  });
+  return null;
+}
+
+function Legend({ title }: { title: string }) {
   return (
     <div className="pointer-events-none absolute bottom-6 left-2 z-[1000] rounded bg-base/85 px-2 py-1.5 text-[11px] text-ink">
-      <p className="mb-1 text-muted">Visual similarity (percentile)</p>
+      <p className="mb-1 text-muted">{title}</p>
       <div
         className="h-2 w-40 rounded-sm"
         style={{ background: `linear-gradient(to right, ${LEGEND_TICKS.map(scoreColour).join(",")})` }}
@@ -110,7 +121,10 @@ function Legend() {
   );
 }
 
-export default function LeafletMap({ body, markers, selected, onSelect, grid, focus }: MapPaneProps) {
+export default function LeafletMap({
+  body, markers, selected, onSelect, grid, focus, onMapClick,
+  legend = "Visual similarity (percentile)",
+}: MapPaneProps) {
   const base = BASEMAPS[body];
   const scored = markers.some((m) => m.weight !== undefined);
   const polar = isPolar(body);
@@ -124,7 +138,8 @@ export default function LeafletMap({ body, markers, selected, onSelect, grid, fo
     <div
       role="region"
       aria-label={`${BODY_LABEL[body]} map`}
-      className="relative h-full min-h-[18rem] overflow-hidden rounded-lg border border-edge"
+      className={`relative h-full min-h-[18rem] overflow-hidden rounded-lg border border-edge ${
+        onMapClick ? "[&_.leaflet-container]:cursor-crosshair" : ""}`}
     >
       <MapContainer
         // The pole needs its own projection, not a different view of the same
@@ -166,6 +181,7 @@ export default function LeafletMap({ body, markers, selected, onSelect, grid, fo
                 fillColor: m.weight === undefined ? "#ffffff" : scoreColour(m.weight),
                 fillOpacity: 0.9,
               }}
+              bubblingMouseEvents={false}
               eventHandlers={{ click: () => onSelect?.(m.tile_id) }}
             >
               <Tooltip>
@@ -178,9 +194,10 @@ export default function LeafletMap({ body, markers, selected, onSelect, grid, fo
         })}
 
         <Framing markers={markers} focus={focus} polar={polar} />
+        {onMapClick && <ClickToSearch onMapClick={onMapClick} />}
       </MapContainer>
 
-      {scored && <Legend />}
+      {scored && <Legend title={legend} />}
     </div>
   );
 }

@@ -1,21 +1,25 @@
 /**
  * Ranked analogs for one site.
  *
- * Shows `visual_cos_scaled` and `physical` — never the raw `score`, which is a
- * ranking value and would overclaim a match (§4.3, §7). Candidates that are not
- * already-known analog sites are flagged "new" and sorted first: that is what
- * the challenge actually asks for.
+ * Shows `visual_cos_scaled`, `physical` and, once #29 has trained, the analog
+ * model's percentile — never the raw `score`, which is a ranking value and
+ * would overclaim a match (§4.3, §7). Candidates that are not already-known
+ * analog sites are flagged "new" and sorted first: that is what the challenge
+ * actually asks for.
  */
 import { coords, newFirst, percent } from "../../lib/format";
-import type { AnalogHit } from "../../lib/types";
+import type { AnalogHit, Body } from "../../lib/types";
+import { TileChip } from "../TileChip";
 
 interface Props {
   hits: AnalogHit[];
+  /** The body the hits are on, for their thumbnails. */
+  body?: Body;
   selected?: string | null;
   onSelect?: (tileId: string) => void;
 }
 
-export function AnalogList({ hits, selected, onSelect }: Props) {
+export function AnalogList({ hits, body = "earth", selected, onSelect }: Props) {
   if (hits.length === 0) {
     return <p className="p-4 text-sm text-muted">No candidates yet.</p>;
   }
@@ -33,6 +37,8 @@ export function AnalogList({ hits, selected, onSelect }: Props) {
             ].join(" ")}
           >
             <span className="w-5 pt-0.5 text-xs text-muted">{i + 1}</span>
+            <TileChip body={body} tile={hit} label={`Candidate ${hit.tile_id}`}
+                      className="w-12 shrink-0" />
             <span className="min-w-0 flex-1">
               <span className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{coords(hit.lat, hit.lon)}</span>
@@ -44,7 +50,7 @@ export function AnalogList({ hits, selected, onSelect }: Props) {
                   </span>
                 )}
               </span>
-              <span className="mt-1 block font-mono text-xs text-muted">{hit.tile_id}</span>
+              <span className="mt-1 block truncate font-mono text-xs text-muted">{hit.tile_id}</span>
             </span>
             <span className="shrink-0 text-right text-xs">
               <span className="block">
@@ -53,6 +59,11 @@ export function AnalogList({ hits, selected, onSelect }: Props) {
               <span className="block text-muted">
                 physical <strong className="font-semibold">{percent(hit.physical)}</strong>
               </span>
+              {hit.model_score != null && (
+                <span className="block text-muted" title="Analog model (#29): percentile among all Earth tiles">
+                  model <strong className="font-semibold">{percent(hit.model_score)}</strong>
+                </span>
+              )}
             </span>
           </button>
         </li>

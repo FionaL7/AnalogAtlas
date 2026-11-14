@@ -1,11 +1,16 @@
 /**
- * The report card: dimension by dimension, where the analogy holds and where it
- * breaks down. Rows arrive already scored from Python (§4.3) and are only
- * grouped here. Every bar also prints its number, so colour is never the only
- * carrier of meaning (§6).
+ * The report card: the two tiles side by side, then dimension by dimension
+ * where the analogy holds and where it breaks down, then what to test there.
+ * Rows arrive already scored from Python (§4.3) and are only grouped here.
+ * Every bar also prints its number, so colour is never the only carrier of
+ * meaning (§6).
  */
-import { GROUP_LABEL, groupBreakdown, percent, type Group } from "../../lib/format";
-import type { BreakdownRow, TwinsResponse } from "../../lib/types";
+import { useState } from "react";
+
+import { lunarBodyOf, type TileLike } from "../../lib/chips";
+import { GROUP_LABEL, coords, groupBreakdown, percent, type Group } from "../../lib/format";
+import type { BreakdownRow, FieldTests, Layer, TwinsResponse } from "../../lib/types";
+import { TileChip } from "../TileChip";
 
 const GROUP_ORDER: Group[] = ["holds", "breaks", "cannot-reproduce", "no-equivalent"];
 
@@ -40,11 +45,106 @@ function Row({ row, group }: { row: BreakdownRow; group: Group }) {
   );
 }
 
+const asTile = (rec: Record<string, unknown>): TileLike | null =>
+  typeof rec.lat === "number" && typeof rec.lon === "number" ? (rec as unknown as TileLike) : null;
+
+function SideBySide({ data }: { data: TwinsResponse }) {
+  const [layer, setLayer] = useState<Layer>("img");
+  const earth = asTile(data.earth);
+  const moon = asTile(data.moon);
+  if (!earth || !moon) return null;
+  const lunar = lunarBodyOf(data.moon);
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-xs uppercase tracking-wide text-muted">Side by side, same 85 km scale</h3>
+        <div role="radiogroup" aria-label="Picture layer" className="flex rounded border border-edge text-xs">
+          {(["img", "shade"] as Layer[]).map((l) => (
+            <button
+              key={l}
+              type="button"
+              role="radio"
+              aria-checked={layer === l}
+              onClick={() => setLayer(l)}
+              className={`px-2 py-0.5 ${layer === l ? "bg-edge text-ink" : "text-muted hover:text-ink"}`}
+            >
+              {l === "img" ? "Imagery" : "Terrain shape"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-3">
+        <div>
+          <p className="mb-1 text-xs text-muted">Earth · {coords(earth.lat, earth.lon)}</p>
+          <TileChip body="earth" tile={earth} layer={layer} caption
+                    label={`Earth tile near ${coords(earth.lat, earth.lon)}`} />
+        </div>
+        <div>
+          <p className="mb-1 text-xs text-muted">
+            {lunar === "moon_polar" ? "Moon south pole" : "Moon"} · {coords(moon.lat, moon.lon)}
+          </p>
+          <TileChip body={lunar} tile={moon} layer={layer} caption
+                    label={`Moon tile near ${coords(moon.lat, moon.lon)}`} />
+        </div>
+      </div>
+      {lunar === "moon_polar" && layer === "img" && (
+        <p className="mt-1 text-[11px] text-muted">
+          The pole shows terrain shape only: the imagery mosaic covers 85.5–90°S and much of it is in
+          permanent shadow.
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function FieldTestList({ tests }: { tests: FieldTests }) {
+  return (
+    <div className="mt-6">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">What to test here</h3>
+      {tests.tests.length === 0 ? (
+        <p className="mt-2 text-sm text-muted">
+          No dimension holds strongly enough here to recommend a field test.
+        </p>
+      ) : (
+        <ul className="mt-2 flex flex-col gap-2">
+          {tests.tests.map((t) => (
+            <li key={t.title} className="rounded border border-holds/30 bg-holds/5 p-3">
+              <p className="font-medium">{t.title}</p>
+              <p className="mt-0.5 text-xs text-holds">Reduces the risk of: {t.risk.toLowerCase()}</p>
+              <p className="mt-1 text-sm text-muted">{t.detail}</p>
+              <p className="mt-1 text-[11px] text-muted">
+                Based on: {t.based_on.join(", ")} (weakest match {percent(t.strength)})
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {tests.avoid.length > 0 && (
+        <>
+          <h4 className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">
+            Don’t rely on this site for
+          </h4>
+          <ul className="mt-1 list-disc pl-5 text-sm text-muted">
+            {tests.avoid.map((a) => <li key={a.dimension}>{a.reason}</li>)}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function ReportCard({ data }: { data: TwinsResponse }) {
   const groups = groupBreakdown(data.breakdown);
   return (
-    <section className="p-4">
-      <h2 className="text-sm uppercase tracking-wide text-muted">Report card</h2>
+    <section className="p-4" aria-label="Report card">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm uppercase tracking-wide text-muted">Report card</h2>
+        {data.model_score != null && (
+          <span className="text-xs text-muted" title="Analog model (#29): how much this Earth tile resembles known Moon analog sites, as a percentile of all Earth tiles">
+            Analog model: <strong className="text-ink">{percent(data.model_score)}</strong> percentile
+          </span>
+        )}
+      </div>
       <p className="mt-1 font-mono text-xs text-muted">
         {String(data.moon.tile_id)} ↔ {String(data.earth.tile_id)}
       </p>
@@ -54,7 +154,9 @@ export function ReportCard({ data }: { data: TwinsResponse }) {
         </p>
       )}
 
-      <div className="mt-3 overflow-x-auto">
+      <SideBySide data={data} />
+
+      <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[34rem] border-collapse text-sm">
           <caption className="sr-only">
             Dimension-by-dimension comparison of the lunar tile and the Earth tile
@@ -81,6 +183,8 @@ export function ReportCard({ data }: { data: TwinsResponse }) {
           ))}
         </table>
       </div>
+
+      {data.field_tests && <FieldTestList tests={data.field_tests} />}
 
       <p className="mt-4 text-xs text-muted">
         Lunar surface temperatures are modelled, not measured. Slope and relief are measured at the

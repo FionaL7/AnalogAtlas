@@ -103,7 +103,10 @@ describe("static export is preferred when a site id is known", () => {
 });
 
 describe("sites()", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    api._resetStaticCache();
+  });
 
   it("falls back to mock sites when the static export is not there yet", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(

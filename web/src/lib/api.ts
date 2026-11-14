@@ -10,11 +10,15 @@ import type {
   AnalogsRequest,
   AnalogsResponse,
   Body,
+  CandidatesFile,
+  RadarFile,
   SearchRequest,
   SearchResponse,
   Site,
   TileCell,
+  TrapsFile,
   TwinsResponse,
+  ValidationFile,
 } from "./types";
 
 const BASE: string = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
@@ -55,11 +59,24 @@ export function search(req: SearchRequest): Promise<SearchResponse> {
 async function fromStatic<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(path);
-    return res.ok ? ((await res.json()) as T) : null;
+    if (!res.ok) return null;
+    // A dev server answers unknown paths with index.html; that is "missing", not data.
+    if ((res.headers.get("content-type") ?? "").includes("text/html")) return null;
+    return (await res.json()) as T;
   } catch {
     return null;
   }
 }
+
+/** Whole-app files (traps, candidates, ...) are fetched once and shared by every page. */
+const shared = new Map<string, Promise<unknown>>();
+function once<T>(path: string): Promise<T | null> {
+  if (!shared.has(path)) shared.set(path, fromStatic<T>(path));
+  return shared.get(path) as Promise<T | null>;
+}
+
+/** Test hook: forget cached static files. */
+export const _resetStaticCache = () => shared.clear();
 
 export async function analogs(req: AnalogsRequest, siteId?: string): Promise<AnalogsResponse> {
   if (siteId) {
@@ -70,10 +87,15 @@ export async function analogs(req: AnalogsRequest, siteId?: string): Promise<Ana
   return request<AnalogsResponse>("/analogs", { method: "POST", body: JSON.stringify(req) });
 }
 
+/**
+ * The report card for one lunar tile and one Earth tile. `srcBody` is the
+ * lunar body (`moon` or `moon_polar`): the API needs it to find the tile.
+ */
 export async function twins(
   srcTileId: string,
   earthTileId: string,
   siteId?: string,
+  srcBody: Body = "moon",
 ): Promise<TwinsResponse> {
   if (siteId) {
     const exported = await fromStatic<TwinsResponse>(
@@ -82,7 +104,9 @@ export async function twins(
     if (exported) return exported;
   }
   if (!isLive()) return mockTwins(srcTileId, earthTileId);
-  const q = new URLSearchParams({ src_tile_id: srcTileId, earth_tile_id: earthTileId });
+  const q = new URLSearchParams({
+    src_tile_id: srcTileId, earth_tile_id: earthTileId, src_body: srcBody,
+  });
   return request<TwinsResponse>(`/twins?${q}`);
 }
 
@@ -91,19 +115,22 @@ export async function twins(
  * export only (03_export.py); until it has run there is no grid, just results.
  */
 export async function tiles(body: Body): Promise<TileCell[]> {
-  return (await fromStatic<TileCell[]>(`/data/tiles/${body}.json`)) ?? [];
+  return (await once<TileCell[]>(`/data/tiles/${body}.json`)) ?? [];
 }
+
+/** Lookalike traps (#30). Null until 03_export.py has run. */
+export const traps = () => once<TrapsFile>("/data/traps.json");
+/** The #29 model's top new candidates. */
+export const candidates = () => once<CandidatesFile>("/data/candidates.json");
+/** Mini-RF radar roughness per lunar site (#17). */
+export const radar = () => once<RadarFile>("/data/radar.json");
+/** Hold-one-out validation of the analog model (#29). */
+export const validation = () => once<ValidationFile>("/data/validation.json");
 
 /**
  * Sites come from the static export, not the API — the demo path must work with
  * the service down (§4.2). Falls back to mocks until 03_export.py (#14) runs.
  */
 export async function sites(): Promise<Site[]> {
-  try {
-    const res = await fetch("/data/sites.json");
-    if (!res.ok) throw new Error(String(res.status));
-    return (await res.json()) as Site[];
-  } catch {
-    return MOCK_SITES;
-  }
+  return (await once<Site[]>("/data/sites.json")) ?? MOCK_SITES;
 }

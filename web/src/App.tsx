@@ -2,10 +2,23 @@ import { NavLink, Route, Routes } from "react-router-dom";
 
 import { apiMode } from "./lib/api";
 import { Atlas } from "./routes/Atlas";
+import { Data } from "./routes/Data";
+import { Discoveries } from "./routes/Discoveries";
 import { Methodology } from "./routes/Methodology";
+import { SiteGuide } from "./routes/SiteGuide";
+import { Sites } from "./routes/Sites";
+import { Traps } from "./routes/Traps";
 
 const link = ({ isActive }: { isActive: boolean }) =>
   `rounded px-2 py-1 text-sm ${isActive ? "bg-edge text-ink" : "text-muted hover:text-ink"}`;
+
+const NAV: [string, string][] = [
+  ["/sites", "Field guides"],
+  ["/discoveries", "Discoveries"],
+  ["/traps", "Traps"],
+  ["/methodology", "Methodology"],
+  ["/data", "Data"],
+];
 
 export default function App() {
   return (
@@ -15,9 +28,11 @@ export default function App() {
         <span className="hidden text-xs text-muted sm:inline">
           Earth analogs for Moon-base sites
         </span>
-        <nav className="ml-auto flex items-center gap-1">
+        <nav className="ml-auto flex flex-wrap items-center gap-1">
           <NavLink to="/" className={link} end>Atlas</NavLink>
-          <NavLink to="/methodology" className={link}>Methodology</NavLink>
+          {NAV.map(([to, label]) => (
+            <NavLink key={to} to={to} className={link}>{label}</NavLink>
+          ))}
           <span className="ml-2 rounded border border-edge px-1.5 py-0.5 text-xs text-muted">
             {apiMode()}
           </span>
@@ -26,7 +41,12 @@ export default function App() {
       <main className="p-4">
         <Routes>
           <Route path="/" element={<Atlas />} />
+          <Route path="/sites" element={<Sites />} />
+          <Route path="/sites/:id" element={<SiteGuide />} />
+          <Route path="/discoveries" element={<Discoveries />} />
+          <Route path="/traps" element={<Traps />} />
           <Route path="/methodology" element={<Methodology />} />
+          <Route path="/data" element={<Data />} />
           <Route path="*" element={<p className="text-sm text-muted">Not found.</p>} />
         </Routes>
       </main>

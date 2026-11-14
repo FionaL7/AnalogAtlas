@@ -37,6 +37,7 @@ def post_analogs(req: AnalogsRequest, request: Request) -> AnalogsResponse:
             AnalogHit(tile_id=r.tile_id, lat=float(r.lat), lon=float(r.lon),
                       score=float(r.score), visual_cos_scaled=float(r.visual_cos_scaled),
                       physical=float(r.physical), known_analog=json_scalar(r.known_analog),
+                      model_score=json_scalar(getattr(r, "model_score", None)),
                       tile_url=tile_url(request, dst_body, r.tile_id))
             for r in hits.itertuples()
         ])

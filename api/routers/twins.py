@@ -12,6 +12,7 @@ import requests
 from fastapi import APIRouter, Query, Request
 
 from analogatlas.analog import breakdown, earth_climate
+from analogatlas.fieldtest import what_to_test
 
 from ..indices import get_index, json_scalar, row_by_tile_id, row_dict
 from ..schemas import Body, TwinsResponse
@@ -55,4 +56,6 @@ def get_twins(
                "visual_cos_scaled": float(earth_row.visual_cos_scaled)},
         climate=None if climate is None else {k: json_scalar(v) for k, v in climate.items()},
         breakdown=rows.to_dict("records"),
+        field_tests=what_to_test(rows),
+        model_score=json_scalar(earth_row.get("model_score")),
     )

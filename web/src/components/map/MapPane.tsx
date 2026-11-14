@@ -28,6 +28,10 @@ export interface MapPaneProps {
   grid?: TileCell[];
   /** Centre here instead of fitting to the markers (e.g. the source site). */
   focus?: { lat: number; lon: number };
+  /** A click on the map itself (not on a marker): start a search from there. */
+  onMapClick?: (lat: number, lon: number) => void;
+  /** What marker colour means; defaults to visual similarity. */
+  legend?: string;
 }
 
 const LeafletMap = lazy(() => import("./LeafletMap"));

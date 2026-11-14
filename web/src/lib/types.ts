@@ -50,6 +50,8 @@ export interface AnalogHit extends SearchHit {
   visual_cos_scaled: number;
   /** 0-1 closeness of slope and relief. */
   physical: number;
+  /** #29 analog model: 0-1 percentile among Earth tiles. Null/absent until trained. */
+  model_score?: number | null;
 }
 
 export interface AnalogsResponse {
@@ -69,11 +71,31 @@ export interface BreakdownRow {
   kind?: "compare" | "no_equivalent" | "earth_limit";
 }
 
+/** One suggestion from analogatlas/fieldtest.py (C6). */
+export interface FieldTest {
+  title: string;
+  /** The exploration risk this test reduces. */
+  risk: string;
+  detail: string;
+  /** Report-card dimensions this suggestion rests on. */
+  based_on: string[];
+  /** The weakest match among `based_on`, 0-1. */
+  strength: number;
+}
+
+export interface FieldTests {
+  tests: FieldTest[];
+  avoid: { dimension: string; reason: string }[];
+}
+
 export interface TwinsResponse {
   moon: Record<string, string | number | null>;
   earth: Record<string, string | number | null>;
   climate: Record<string, number | null> | null;
   breakdown: BreakdownRow[];
+  /** What to test at the Earth site. Absent from older exports. */
+  field_tests?: FieldTests | null;
+  model_score?: number | null;
 }
 
 /** Static export: tiles/{body}.json (§4.2). One cell of the map grid. */
@@ -106,4 +128,108 @@ export interface Site {
   blurb?: string;
   /** Artemis candidate base regions — the ones that answer "permanent Moon base". */
   is_base_region?: boolean;
+  /** false: outside every index, so it has no analogs (never clamped). */
+  in_index?: boolean;
+  /** A well-studied Earth analog: a reference point, not a search target. */
+  is_known_analog?: boolean;
+}
+
+/** Static export: traps.json (#30). */
+export interface TrapBreaker {
+  id: "ice" | "vegetation" | "water" | "wet_climate" | "slope" | "relief" | string;
+  label: string;
+  /** true: about what the ground is; false: about its shape. */
+  environment: boolean;
+  reason: string;
+}
+
+export interface Trap {
+  src_body: Body;
+  src_tile_id: string;
+  src_lat: number;
+  src_lon: number;
+  earth_tile_id: string;
+  earth_lat: number;
+  earth_lon: number;
+  visual_cos: number;
+  /** 0-1 percentile of visual similarity among all Earth tiles. */
+  visual_pct: number;
+  /** Rank by image similarity alone (1 = the top lookalike). */
+  visual_rank: number;
+  /** Rank by cross_body (image + slope/relief). */
+  physics_rank: number;
+  /** #29 model, 0-1. Null without a trained model. */
+  model_score_pct: number | null;
+  known_analog: string | null;
+  breakers: TrapBreaker[];
+}
+
+export interface TrapStats {
+  src_body: Body;
+  lookalikes_checked: number;
+  traps: number;
+  trap_rate: number;
+  by_reason: Record<string, number>;
+}
+
+export interface TrapsFile {
+  stats: TrapStats[];
+  traps: Trap[];
+  by_site: Record<string, Trap[]>;
+}
+
+/** Static export: candidates.json (#29), one list per target. */
+export interface Candidate {
+  tile_id: string;
+  lat: number;
+  lon: number;
+  /** 0-100 percentile of the model score. */
+  score_pct: number;
+  why: string[];
+  slope_med?: number | null;
+  barren_frac?: number | null;
+  precip_mm?: number | null;
+  access_min?: number | null;
+}
+
+export type CandidatesFile = Partial<Record<"moon" | "mars" | "all", Candidate[]>>;
+
+/** Static export: radar.json (#17), keyed by site id. */
+export interface RadarSite {
+  lat: number;
+  lon: number;
+  box_half_km: number;
+  cpr_median: number;
+  cpr_p90: number;
+  coverage: number;
+  n_pixels: number;
+  source: string;
+}
+
+export type RadarFile = Record<string, RadarSite>;
+
+/** Static export: validation.json, key analog_model (#29). */
+export interface MethodSummary {
+  median_top_pct: number;
+  mean_top_pct: number;
+  in_top_5pct: number;
+  in_top_10pct: number;
+  n: number;
+}
+
+export interface ModelTarget {
+  sites_used: string[];
+  summary: Record<string, MethodSummary>;
+  per_site: { site: string; top_pct: number }[];
+  weights?: { feature: string; weight: number }[];
+}
+
+export interface ValidationFile {
+  analog_model?: {
+    method: string;
+    note: string;
+    random_baseline_top_pct: number;
+    targets: Partial<Record<"all" | "moon" | "mars", ModelTarget>>;
+    skipped_sites?: Record<string, string>;
+  };
 }

@@ -193,3 +193,42 @@ def test_missing_index_fails_with_a_clear_message(tmp_path, monkeypatch):
     monkeypatch.setattr("sys.argv", ["03_export.py", "--out", str(tmp_path / "o")])
     with pytest.raises(SystemExit, match="No index for moon, earth"):
         module.main()
+
+
+def test_traps_json_is_exported(exported):
+    """#30: lookalike traps for the app's Traps panel, with the headline rate."""
+    data = read(exported / "traps.json")
+    assert set(data) == {"stats", "traps", "by_site"}
+    (moon_stats, *_) = data["stats"]
+    assert moon_stats["src_body"] == "moon"
+    assert moon_stats["lookalikes_checked"] > 0
+    assert 0.0 <= moon_stats["trap_rate"] <= 1.0
+    for t in data["traps"]:
+        assert t["breakers"] and all(b["reason"] for b in t["breakers"])
+        assert t["visual_rank"] >= 1 and t["physics_rank"] >= 1
+    earth_ids = [t["earth_tile_id"] for t in data["traps"]]
+    assert len(earth_ids) == len(set(earth_ids))
+
+
+def test_report_cards_say_what_to_test(exported):
+    """C6: each exported report card carries field tests."""
+    for path in (exported / "twins").glob("*.json"):
+        card = read(path)
+        assert set(card["field_tests"]) == {"tests", "avoid"}
+
+
+def test_candidates_and_radar_are_exported_when_present(index_dir, tmp_path, monkeypatch):
+    (index_dir.path / "candidates_moon.json").write_text(json.dumps(
+        [{"tile_id": "earth_x", "lat": 1.0, "lon": 2.0, "score_pct": 99.0, "why": ["low rainfall"]}]))
+    (index_dir.path / "moon_site_cpr.json").write_text(json.dumps(
+        {"Haworth": {"lat": -87.45, "lon": -5.17, "cpr_median": 0.49887, "source": "Mini-RF"},
+         "Nowhere": {"lat": 0, "lon": 0, "cpr_median": 0.1, "source": "Mini-RF"}}))
+    out = tmp_path / "o"
+    module = load_script()
+    monkeypatch.setattr("sys.argv", ["03_export.py", "--out", str(out), "--no-climate",
+                                     "--k", "12", "--pairs", "1"])
+    assert module.main() == 0
+    assert read(out / "candidates.json")["moon"][0]["tile_id"] == "earth_x"
+    radar = read(out / "radar.json")
+    assert set(radar) == {"haworth"}          # keyed by site id; unknown names dropped
+    assert radar["haworth"]["cpr_median"] == 0.4989

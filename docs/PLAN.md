@@ -28,7 +28,7 @@ Scope: the Moon first. How much Mars gets is an [open decision](#open-decisions)
 
 ## Status
 
-The Moon search index (60°S to 60°N) is built and verified, and the south pole now has its own index. The Earth side, the API and the app haven't been started.
+Search works end to end on real data: Moon, south pole and Earth indexes, the API, the static export and the app. Still open: the Earth half of the radar close study (#19) and Mars (#7).
 
 | Piece | State | Notes |
 | --- | --- | --- |
@@ -37,10 +37,12 @@ The Moon search index (60°S to 60°N) is built and verified, and the south pole
 | Moon physical features | Done | Slope, relief and elevation (LOLA); rock abundance and regolith-temperature anomaly (Diviner) |
 | Moon CLIP embeddings | Done | 512-d image vectors, plus hillshade vectors averaged over four 90° rotations |
 | Moon south pole (`moon_polar`) | Done | 89 tiles, 75–90°S, polar stereographic. Adds illumination, permanent shadow and Earth visibility. All ten Artemis regions covered ([#26](https://github.com/FionaL7/AnalogAtlas/issues/26)) |
-| Earth side | In progress | Earth Engine project set in `.env` as `EE_PROJECT` (Community tier). Hillshade tiles + slope/relief from Copernicus DEM via `analogatlas/earth_ee.py`; imagery from GIBS Blue Marble |
-| Search API | Not started | The search logic is in `analogatlas/analog.py`; it needs a FastAPI wrapper |
-| React frontend | Not started | Replaces an earlier Streamlit draft, which has been removed |
-| Radar close study | Not started | Needs RCM or Sentinel-1 scenes and Mini-RF data |
+| Earth side | Done | 11,699 land tiles. Hillshade + slope/relief from Copernicus DEM via `analogatlas/earth_ee.py` (Earth Engine, `EE_PROJECT` in `.env`); imagery from GIBS Blue Marble |
+| Analog model | Done | PU learning on known sites, hold-one-out validation, new candidates ([#29](https://github.com/FionaL7/AnalogAtlas/issues/29)) |
+| Lookalike traps | Done | `analogatlas/traps.py`, exported as `traps.json` ([#30](https://github.com/FionaL7/AnalogAtlas/issues/30)) |
+| Search API | Done | `api/`: `/search`, `/analogs`, `/twins` (with field tests and model score), `/tile` |
+| React frontend | Done | Atlas (site, map-click and text/picture search, report card with tile pictures and field tests), field guides, discoveries, traps, methodology with validation, data and credits ([#34](https://github.com/FionaL7/AnalogAtlas/issues/34)) |
+| Radar close study | Moon done | Mini-RF CPR for every lunar site (`radar.json`). Earth RCM/Sentinel-1 side pending ([#19](https://github.com/FionaL7/AnalogAtlas/issues/19)) |
 | Mars | Not started | |
 
 **Verification.** Three text queries on the Moon index returned the expected terrain, and slopes measured independently from LOLA elevation data agree:
@@ -144,12 +146,12 @@ The next milestone is the Earth index. Every Earth–Moon feature in the app dep
 - [x] Register Google Earth Engine (non-commercial use); project id lives in `.env`
 - [ ] Earth pipeline in Earth Engine: tile grid, Copernicus DEM slope and relief, export a table
 - [ ] Earth tile images (ASTER hillshade + imagery) and their CLIP embeddings
-- [ ] FastAPI wrapper around `analogatlas/analog.py` with `/search`, `/analogs`, `/twins`, `/tile`
-- [ ] `scripts/03_export.py`: static export of the demo path to `web/public/data/` (see [ARCHITECTURE.md](ARCHITECTURE.md#4-data-contract) §4.2)
-- [ ] React app skeleton against mocked API responses
+- [x] FastAPI wrapper around `analogatlas/analog.py` with `/search`, `/analogs`, `/twins`, `/tile`
+- [x] `scripts/03_export.py`: static export of the demo path to `web/public/data/` (see [ARCHITECTURE.md](ARCHITECTURE.md#4-data-contract) §4.2)
+- [x] React app: every backend output has a page ([#34](https://github.com/FionaL7/AnalogAtlas/issues/34))
 - [ ] Run the CSA SAR tutorial on one RCM scene
-- [ ] Download Mini-RF and the polar LOLA / Diviner products
-- [ ] Add the fixed "Earth's limits" rows to the report card in `analog.py`
+- [x] Download Mini-RF and the polar LOLA / Diviner products
+- [x] Add the fixed "Earth's limits" rows to the report card in `analog.py`
 
 ## Decisions
 
@@ -158,6 +160,7 @@ The next milestone is the Earth index. Every Earth–Moon feature in the app dep
 - React frontend
 - Laptop + Earth Engine + Colab for the pipeline (no paid compute there)
 - Two developers: Dev A (data and ML), Dev B (app and radar)
+- **Static export is not committed.** `web/public/data/` is gitignored; the deploy pulls `data/index/` from the `data` release and runs `scripts/03_export.py` before building the frontend ([#34](https://github.com/FionaL7/AnalogAtlas/issues/34), [#21](https://github.com/FionaL7/AnalogAtlas/issues/21)).
 - **Hosting: Google Cloud**, on Fiona's account: the same Cloud project as Earth Engine ([#5](https://github.com/FionaL7/AnalogAtlas/issues/5)).
   - API on Cloud Run. Domain **marsneedsmaps.space** (Porkbun offer).
   - Set up later today, under [#21](https://github.com/FionaL7/AnalogAtlas/issues/21).

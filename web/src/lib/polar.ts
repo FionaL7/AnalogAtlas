@@ -15,14 +15,11 @@
  */
 import L from "leaflet";
 
-/** config.MOON_RADIUS_M */
-export const MOON_RADIUS_M = 1_737_400;
-/** config.MOON_SP_EXTENT_M — the matrix is one tile tall at zoom 0. */
-export const SP_EXTENT_M = 2_191_860;
-/** config.MOON_SP_ORIGIN_M — top-left corner of the tile matrix, in metres. */
-export const SP_ORIGIN_M: [number, number] = [-1_095_930, 1_095_930];
-/** config.MOON_POLAR_MAX_LAT — the edge of the LOLA/PGDA polar products. */
-export const POLAR_MAX_LAT = -75;
+import { MOON_RADIUS_M, POLAR_MAX_LAT, SP_EXTENT_M, SP_ORIGIN_M } from "./geo";
+
+// Re-exported so existing imports keep working; the numbers live in geo.ts,
+// which has no Leaflet import.
+export { MOON_RADIUS_M, POLAR_MAX_LAT, SP_EXTENT_M, SP_ORIGIN_M };
 
 const DEG = Math.PI / 180;
 

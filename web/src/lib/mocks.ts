@@ -91,19 +91,23 @@ const MOCK_CANDIDATES: Array<[number, number, string | null]> = [
 
 export function mockAnalogs(req: AnalogsRequest): AnalogsResponse {
   const k = req.k ?? 12;
+  // From Earth the analogs are Moon tiles, inside the 60°S-60°N Moon index.
+  const toMoon = req.src_body === "earth";
   const results = MOCK_CANDIDATES.map(([lat, lon, known], i) => ({
-    tile_id: earthTile(lat, lon),
-    lat,
+    tile_id: toMoon ? `moon_6_${20 + i}_${40 + i}` : earthTile(lat, lon),
+    lat: toMoon ? Math.max(-58, Math.min(58, lat)) : lat,
     lon,
     score: Number((0.74 - i * 0.02).toFixed(3)),
     visual_cos_scaled: Number(Math.max(0.05, 0.97 - i * 0.04).toFixed(3)),
     physical: Number(Math.max(0.05, 0.81 - i * 0.05).toFixed(3)),
-    known_analog: known,
+    known_analog: toMoon ? null : known,
+    model_score: toMoon ? null : Number(Math.max(0.1, 0.99 - i * 0.03).toFixed(3)),
     tile_url: `/mock-tile.svg`,
   }));
   return {
     src_tile: {
-      tile_id: req.src_body === "moon_polar" ? "moonsp_5_5" : "moon_6_0_90",
+      tile_id: req.src_body === "moon_polar" ? "moonsp_5_5"
+        : toMoon ? earthTile(req.lat, req.lon) : "moon_6_0_90",
       lat: req.lat,
       lon: req.lon,
     },
@@ -136,6 +140,19 @@ export function mockTwins(src_tile_id: string, earth_tile_id: string): TwinsResp
     earth: { tile_id: earth_tile_id, lat: -77.5, lon: 162, slope_med: 5.1, relief_km: 1.0,
              visual_cos_scaled: 0.91 },
     climate: { TS_MIN: -55.2, TS_MAX: 8.1, PRECTOTCORR: 0.02, ALLSKY_SFC_SW_DWN: 3.1 },
+    model_score: 0.94,
+    field_tests: {
+      tests: [
+        { title: "Rover mobility and traverse planning", risk: "Getting stuck or tipping on slopes",
+          detail: "Slopes and relief match, so drive tests, path planners and slope-stability limits carry over.",
+          based_on: ["Median slope", "Local relief"], strength: 0.83 },
+        { title: "Dust handling and dry excavation", risk: "Seals, joints and diggers failing in dry fine material",
+          detail: "Hyper-arid, so dry-regolith excavation and ISRU trials run without water changing the soil.",
+          based_on: ["Dryness"], strength: 0.96 },
+      ],
+      avoid: [{ dimension: "Surface temperature swing",
+                reason: "Surface temperature swing breaks down here (Moon 280 K, Earth 63 K)" }],
+    },
     breakdown: [
       { dimension: "Terrain shape (ML)", moon: "-", earth: "-", match: 0.91, kind: "compare",
         note: "CLIP similarity of hillshade tiles, sun-direction invariant" },

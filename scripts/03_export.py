@@ -16,6 +16,9 @@ Reads data/index/ and writes, under --out:
     analogs/{site_id}.json         top-k Earth analogs per site (or Moon, reversed)
     twins/{site}__{tile}.json      report cards, climate baked in
     validation.json                copied from data/index/ if #16 has produced it
+    traps.json                     lookalike traps (#30)
+    candidates.json                the #29 model's top new candidates, per target
+    radar.json                     Mini-RF CPR per lunar site (#17), keyed by site id
 """
 from __future__ import annotations
 
@@ -31,7 +34,7 @@ import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from analogatlas import analog, config as C, tiles  # noqa: E402
+from analogatlas import analog, config as C, fieldtest, tiles, traps  # noqa: E402
 from analogatlas.sites import (  # noqa: E402
     EARTH_PRESETS, KNOWN_EARTH_ANALOGS, MOON_BASE_REGIONS, MOON_SITES,
 )
@@ -155,6 +158,18 @@ def build_dimensions(moon: analog.BodyIndex, earth: analog.BodyIndex,
 
 
 # ------------------------------------------------------------- exports ------
+def load_model_scores(column: str = "analog_score_moon") -> dict[str, float] | None:
+    """Earth tile_id -> #29 model score (0-1 percentile, 1 = most like the
+    known Moon analogs). None until scripts/04_train.py has run."""
+    path = C.INDEX / "earth_scores.parquet"
+    if not path.exists():
+        return None
+    sc = pd.read_parquet(path)
+    if column not in sc:
+        return None
+    return dict(zip(sc.tile_id.astype(str), sc[column].astype(float)))
+
+
 def export_tiles(idx: analog.BodyIndex, body: str, out: Path) -> int:
     wanted = TILE_COLUMNS + (POLAR_TILE_COLUMNS if body == "moon_polar" else [])
     cols = [c for c in wanted if c in idx.meta.columns]
@@ -183,7 +198,8 @@ def export_tiles(idx: analog.BodyIndex, body: str, out: Path) -> int:
 
 
 def export_analogs(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
-                   k: int, out: Path) -> list[dict] | None:
+                   k: int, out: Path,
+                   model_scores: dict[str, float] | None = None) -> list[dict] | None:
     """Top-k cross-body analogs for one site. None when the site is off-index."""
     if not site["in_index"]:
         return None
@@ -196,6 +212,7 @@ def export_analogs(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
         visual_cos_scaled=clean(r.visual_cos_scaled, 4),
         physical=clean(r.physical, 4),
         known_analog=clean(getattr(r, "known_analog", None)),
+        model_score=(clean(model_scores.get(str(r.tile_id)), 4) if model_scores else None),
     ) for r in hits.itertuples()]
     src_row = src.meta.iloc[i]
     write_json(out / "analogs" / f"{site['id']}.json", dict(
@@ -233,6 +250,7 @@ def export_twins(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
                 print(f"  ! NASA POWER failed for {hit['tile_id']}: {e}")
 
         rows = analog.breakdown(moon_row, earth_row, climate)
+        rows = rows.astype(object).where(pd.notna(rows), None)
         path = out / "twins" / f"{site['id']}__{hit['tile_id']}.json"
         write_json(path, dict(
             site_id=site["id"],
@@ -244,9 +262,67 @@ def export_twins(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
                             moon=clean(r.moon), earth=clean(r.earth),
                             match=clean(r.match, 4), note=r.note, kind=r.kind)
                        for r in rows.itertuples()],
+            field_tests=fieldtest.what_to_test(rows),
+            model_score=hit.get("model_score"),
         ))
         written.append(path.name)
     return written
+
+
+def export_traps(sources: list[tuple[str, analog.BodyIndex]], earth: analog.BodyIndex,
+                 sites: list[dict], by_body: dict, out: Path) -> int:
+    """traps.json (#30): lookalikes an image-only AI would pick that fail physics.
+
+    {stats: [...per lunar body], traps: [strongest, one per tile], by_site: {...}}
+    """
+    model_scores = load_model_scores()
+    if model_scores is None:
+        print("  - no data/index/earth_scores.parquet (#29), traps carry no model score")
+
+    found, stats = [], []
+    for body, idx in sources:
+        f, s = traps.scan(idx, earth, body, model_scores=model_scores)
+        found += f
+        stats.append(s)
+        print(f"  traps: {s['traps']}/{s['lookalikes_checked']} {body} lookalikes fail a physics "
+              f"check ({s['trap_rate']:.0%}); by reason {s['by_reason']}")
+
+    by_site = {}
+    for site in sites:
+        src = by_body.get(site["body"])
+        if site.get("is_known_analog") or not site.get("in_index") or src is None or site["body"] == "earth":
+            continue
+        i = src.nearest_tile(site["lat"], site["lon"])
+        by_site[site["id"]] = traps.traps_for_tile(src, i, earth, site["body"], model_scores=model_scores)
+
+    return write_json(out / "traps.json", dict(stats=stats, traps=traps.pick(found), by_site=by_site))
+
+
+def export_candidates(out: Path) -> int | None:
+    """candidates.json: {target: [...]} from data/index/candidates_{target}.json (#29)."""
+    payload = {}
+    for target in ("moon", "mars", "all"):
+        path = C.INDEX / f"candidates_{target}.json"
+        if path.exists():
+            payload[target] = json.loads(path.read_text())
+    if not payload:
+        print("  - no data/index/candidates_*.json yet (#29), skipping candidates.json")
+        return None
+    return write_json(out / "candidates.json", payload)
+
+
+def export_radar(sites: list[dict], out: Path) -> int | None:
+    """radar.json: Mini-RF CPR per lunar site (#17), keyed by the site ids the
+    app routes on. Names come from sites.py, so map them through slug()."""
+    path = C.INDEX / "moon_site_cpr.json"
+    if not path.exists():
+        print("  - no data/index/moon_site_cpr.json yet (#17), skipping radar.json")
+        return None
+    raw = json.loads(path.read_text())
+    ids = {s["id"] for s in sites}
+    payload = {slug(name): {k: clean(v, 4) if isinstance(v, float) else v for k, v in row.items()}
+               for name, row in raw.items() if slug(name) in ids}
+    return write_json(out / "radar.json", payload)
 
 
 def main() -> int:
@@ -296,6 +372,7 @@ def main() -> int:
         export_tiles(idx, body, out)
 
     by_body = {"moon": moon, "moon_polar": polar, "earth": earth}
+    model_scores = load_model_scores()
     cards = 0
     off_index = []
     for site in sites:
@@ -306,12 +383,19 @@ def main() -> int:
         if src is None:
             off_index.append(site)
             continue
-        results = export_analogs(site, src, dst, args.k, out)
+        results = export_analogs(site, src, dst, args.k, out,
+                                 model_scores=model_scores if dst is earth else None)
         if results is None:
             off_index.append(site)
             continue
         cards += len(export_twins(site, src, dst, results, args.pairs, out,
                                   with_climate=not args.no_climate))
+
+    export_traps([("moon", moon)] + ([("moon_polar", polar)] if polar else []),
+                 earth, sites, by_body, out)
+
+    export_candidates(out)
+    export_radar(sites, out)
 
     src_validation = C.INDEX / "validation.json"
     if src_validation.exists():

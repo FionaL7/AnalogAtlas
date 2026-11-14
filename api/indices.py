@@ -51,6 +51,20 @@ def annotate_known(meta: pd.DataFrame) -> pd.DataFrame:
     return meta
 
 
+def attach_model_scores(meta: pd.DataFrame) -> pd.DataFrame:
+    """Add `model_score`: the #29 analog model's 0-1 percentile for the Moon
+    target, from earth_scores.parquet. NaN everywhere until 04_train.py runs."""
+    path = C.INDEX / "earth_scores.parquet"
+    meta = meta.copy()
+    meta["model_score"] = np.nan
+    if path.exists():
+        sc = pd.read_parquet(path)
+        if "analog_score_moon" in sc:
+            lookup = dict(zip(sc.tile_id.astype(str), sc.analog_score_moon.astype(float)))
+            meta["model_score"] = meta.tile_id.astype(str).map(lookup).astype(float)
+    return meta
+
+
 def load_all() -> dict[str, BodyIndex]:
     out: dict[str, BodyIndex] = {}
     for body in BODIES:
@@ -61,7 +75,7 @@ def load_all() -> dict[str, BodyIndex]:
         # so a silently misaligned index can never be served (issue #12).
         idx = load_index(body)
         if body == "earth":
-            idx.meta = annotate_known(idx.meta)
+            idx.meta = attach_model_scores(annotate_known(idx.meta))
         elif "known_analog" not in idx.meta:
             idx.meta = idx.meta.assign(known_analog=None)
         out[body] = idx

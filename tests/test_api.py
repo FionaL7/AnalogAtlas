@@ -235,3 +235,39 @@ def test_row_order_mismatch_is_refused_at_startup(tmp_path, monkeypatch, stub_cl
     with pytest.raises(RuntimeError, match="rows differ"):
         with TestClient(api_main.create_app()):
             pass
+
+
+# ---------------------------------------------------- field tests, model --
+def test_twins_carries_field_tests(client, index_dir):
+    """C6: every report card says what to test at the Earth site."""
+    out = client.get("/twins", params={
+        "src_tile_id": index_dir.meta["moon"].tile_id.iloc[0],
+        "earth_tile_id": index_dir.meta["earth"].tile_id.iloc[0]}).json()
+    ft = out["field_tests"]
+    assert set(ft) == {"tests", "avoid"}
+    dims = {row["dimension"] for row in out["breakdown"]}
+    for t in ft["tests"]:
+        assert t["title"] and t["risk"] and set(t["based_on"]) <= dims
+
+
+def test_analogs_model_score_is_null_without_a_trained_model(client, index_dir):
+    moon = index_dir.meta["moon"].iloc[0]
+    hits = client.post("/analogs", json={"src_body": "moon", "lat": float(moon.lat),
+                                         "lon": float(moon.lon), "k": 5}).json()["results"]
+    assert hits and all(h["model_score"] is None for h in hits)
+
+
+def test_analogs_model_score_comes_from_earth_scores(index_dir, stub_clip, monkeypatch):
+    import pandas as pd
+    from fastapi.testclient import TestClient
+
+    from api import main as api_main
+
+    earth = index_dir.meta["earth"]
+    pd.DataFrame({"tile_id": earth.tile_id, "analog_score_moon": 0.25}).to_parquet(
+        index_dir.path / "earth_scores.parquet")
+    moon = index_dir.meta["moon"].iloc[0]
+    with TestClient(api_main.create_app()) as c:
+        hits = c.post("/analogs", json={"src_body": "moon", "lat": float(moon.lat),
+                                        "lon": float(moon.lon), "k": 5}).json()["results"]
+    assert hits and all(h["model_score"] == 0.25 for h in hits)
