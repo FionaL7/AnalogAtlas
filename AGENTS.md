@@ -27,6 +27,7 @@ On a device with no `CLAUDE.local.md` in the repo root:
    ```
 3. Check that `gh auth status` works. If it doesn't, ask the human to run `gh auth login`.
 4. Set up Python with the steps in [docs/PLAN.md](docs/PLAN.md#setup-on-a-new-machine).
+5. Copy `.env.example` to `.env` (gitignored). Ask the human for any values. Never commit `.env` or paste its values into issues.
 
 ## Start of every session
 

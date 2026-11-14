@@ -50,7 +50,11 @@ ETOPO = RAW / "ETOPO_2022_v1_60s_N90W180_surface.nc"
 CLIP_ARCH = "ViT-B-32"
 CLIP_WEIGHTS = "laion2b_s34b_b79k"
 
-# Google Earth Engine: the Cloud project registered for non-commercial use.
-# Set it once per shell:  export EE_PROJECT=your-project-id
+# Local settings: a gitignored .env at the repo root (template: .env.example).
+# Real environment variables win over .env.
 import os  # noqa: E402
+from dotenv import load_dotenv  # noqa: E402
+load_dotenv(ROOT / ".env")
+
+# Google Earth Engine: the Cloud project registered for non-commercial use.
 EE_PROJECT = os.environ.get("EE_PROJECT")

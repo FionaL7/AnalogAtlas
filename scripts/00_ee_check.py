@@ -1,7 +1,7 @@
 """Check that Earth Engine is authenticated and the Cloud project works.
 
     earthengine authenticate              # once per machine, opens a browser
-    export EE_PROJECT=your-project-id
+    cp .env.example .env                  # then set EE_PROJECT in .env
     python scripts/00_ee_check.py
 """
 import sys
@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analogatlas import config as C  # noqa: E402
 
 if not C.EE_PROJECT:
-    sys.exit("Set EE_PROJECT to your Google Cloud project id first: export EE_PROJECT=...")
+    sys.exit("Set EE_PROJECT first: copy .env.example to .env and fill it in.")
 
 ee.Initialize(project=C.EE_PROJECT)
 

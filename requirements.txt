@@ -11,6 +11,7 @@ xarray
 netCDF4
 global-land-mask
 earthengine-api
+python-dotenv==1.2.4
 requests
 scikit-learn
 tqdm
