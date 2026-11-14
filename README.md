@@ -1,8 +1,8 @@
-# TerraMap
+# AnalogAtlas
 
 Search engine for planetary analogs, built for the NASA Space Apps challenge on terrestrial analogs.
 
-Plan and current status for the team: see the shared TerraMap plan doc.
+Plan and current status for the team: see the shared AnalogAtlas plan doc.
 
 * **Find terrain on the Moon**: describe an Earth landscape in words (or upload a photo) and get the matching lunar terrain.
 * **Earth analogs for a lunar site**: rank every land tile on Earth by similarity to a lunar site, then show a report card of where the analogy holds and where it breaks down.
@@ -28,10 +28,10 @@ The raw rasters go in `data/raw/`. They are downloaded once:
 ## Layout
 
 ```
-terramap/config.py    paths, tile scale, endpoints
-terramap/tiles.py     Moon (NASA Trek WMTS) and Earth (NASA GIBS WMS) tiling at equal ground scale
-terramap/rasters.py   PDS3 IMG reader; slope/relief/rock/temperature per tile
-terramap/embed.py     CLIP image/text embeddings (rotation-averaged hillshades)
-terramap/analog.py    search, cross-body matching, NASA POWER climate, analog report card
-terramap/sites.py     known Earth analogs, lunar presets
+analogatlas/config.py    paths, tile scale, endpoints
+analogatlas/tiles.py     Moon (NASA Trek WMTS) and Earth (NASA GIBS WMS) tiling at equal ground scale
+analogatlas/rasters.py   PDS3 IMG reader; slope/relief/rock/temperature per tile
+analogatlas/embed.py     CLIP image/text embeddings (rotation-averaged hillshades)
+analogatlas/analog.py    search, cross-body matching, NASA POWER climate, analog report card
+analogatlas/sites.py     known Earth analogs, lunar presets
 ```

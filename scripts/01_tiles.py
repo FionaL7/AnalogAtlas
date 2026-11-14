@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from terramap import config as C, tiles  # noqa: E402
+from analogatlas import config as C, tiles  # noqa: E402
 
 bodies = sys.argv[1:] or ["moon", "earth"]
 C.INDEX.mkdir(parents=True, exist_ok=True)

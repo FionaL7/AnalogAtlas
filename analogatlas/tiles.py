@@ -23,7 +23,7 @@ def _session() -> requests.Session:
     s = requests.Session()
     retry = Retry(total=5, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
     s.mount("https://", HTTPAdapter(max_retries=retry, pool_maxsize=32))
-    s.headers["User-Agent"] = "terramap-hackathon/0.1"
+    s.headers["User-Agent"] = "analogatlas-hackathon/0.1"
     return s
 
 

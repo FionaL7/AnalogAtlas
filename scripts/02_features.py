@@ -14,9 +14,9 @@ from PIL import Image
 from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from terramap import config as C, rasters  # noqa: E402
-from terramap.embed import embed_images  # noqa: E402
-from terramap.tiles import tile_path  # noqa: E402
+from analogatlas import config as C, rasters  # noqa: E402
+from analogatlas.embed import embed_images  # noqa: E402
+from analogatlas.tiles import tile_path  # noqa: E402
 
 BATCH = 64
 
