@@ -18,3 +18,5 @@ npm run build
   path. `sites.json` is read from there and falls back to mocks until it exists.
 - The map library is **not decided yet**: `src/components/map/MapPane.tsx` is a
   projection-free placeholder behind the props a real map will take.
+- **This is never published to npm.** It's an app, not a library: deploy it, don't
+  publish it. `"private": true` in `package.json` enforces that — leave it there.
