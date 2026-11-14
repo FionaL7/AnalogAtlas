@@ -2,7 +2,7 @@
 
 Search engine for planetary analogs, built for the NASA Space Apps challenge on terrestrial analogs.
 
-Plan and current status for the team: see the shared AnalogAtlas plan doc.
+Plan and current status for the team: [docs/PLAN.md](docs/PLAN.md).
 
 * **Find terrain on the Moon**: describe an Earth landscape in words (or upload a photo) and get the matching lunar terrain.
 * **Earth analogs for a lunar site**: rank every land tile on Earth by similarity to a lunar site, then show a report card of where the analogy holds and where it breaks down.
