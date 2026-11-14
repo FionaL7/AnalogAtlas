@@ -166,7 +166,7 @@ sequenceDiagram
 | `{body}_grid.parquet` | `scripts/01_tiles.py` | The tile grid before features: `tile_id, body, lat, lon, lat_min, lat_max, lon_min, lon_max` (+ `z, y, x` on the Moon, which are Trek WMTS tile coordinates) |
 | `{body}_meta.parquet` | `scripts/02_features.py` | The grid columns plus features, below. One row per tile that has **both** layers on disk |
 | `{body}_img.npy` | `scripts/02_features.py` | `(N, 512)` **float16**, CLIP imagery embedding, L2-normalised |
-| `{body}_shade.npy` | `scripts/02_features.py` | `(N, 512)` **float16**, CLIP hillshade embedding, mean over four 90° rotations then re-normalised — so it encodes terrain *shape*, not sun azimuth |
+| `{body}_shade.npy` | `scripts/02_features.py` | `(N, 512)` **float16**, CLIP hillshade embedding: each tile is contrast-normalised (`embed.normalize_shade`), then averaged over four 90° rotations and re-normalised — so it encodes terrain *shape*, not sun azimuth or steepness |
 
 Row order in the two `.npy` files matches `_meta.parquet` exactly. Nothing re-sorts them; `analog.BodyIndex` relies on this.
 
@@ -174,7 +174,7 @@ Row order in the two `.npy` files matches `_meta.parquet` exactly. Nothing re-so
 
 | Column | Bodies | Source | Meaning |
 | --- | --- | --- | --- |
-| `elev_km` | both | LOLA LDEM_16 / ETOPO 60s | Mean elevation |
+| `elev_km` | both | LOLA LDEM_16 / Copernicus DEM (Earth Engine) | Mean elevation |
 | `relief_km` | both | same | 98th − 2nd percentile elevation within the tile |
 | `slope_med`, `slope_p90` | both | same | Median and 90th-percentile slope, degrees |
 | `rock_abundance` | moon | Diviner GDR L3 | Fractional rock cover; landing-hazard proxy |
@@ -182,7 +182,7 @@ Row order in the two `.npy` files matches `_meta.parquet` exactly. Nothing re-so
 | `t_max_k`, `t_min_k` | moon | `rasters.lunar_temperature_model` | Modelled surface extremes vs latitude, **not** a direct measurement — say so in the UI |
 | `greenness`, `brightness` | earth | Blue Marble tile | Excess-green index and mean brightness |
 
-Slope and relief are comparable across bodies **by construction**: LOLA LDEM_16 is 1.9 km/px and ETOPO 60s is 1.85 km/px, so both are measured at the same baseline. This is the sentence to put on the methodology page.
+Slope and relief are comparable across bodies **by construction**: LOLA LDEM_16 is 1.9 km/px and the Earth DEM (Copernicus GLO-30) is resampled to 1.85 km/px in Earth Engine, so both are measured at the same baseline. This is the sentence to put on the methodology page.
 
 **Scale:** Moon ~5,376 tiles (±60°), Earth ~11.7k land tiles. Embeddings are ~5.5 MB per Moon matrix and ~12 MB per Earth matrix — **~35 MB total**, which fits comfortably in a small container (512 MB is plenty alongside PyTorch).
 
@@ -236,7 +236,7 @@ Slope and relief are comparable across bodies **by construction**: LOLA LDEM_16 
  "climate": {"TS_MIN": -55.2, "TS_MAX": 8.1, "PRECTOTCORR": 0.02, "ALLSKY_SFC_SW_DWN": 3.1},
  "breakdown": [
    {"dimension": "Median slope", "moon": "4.7°", "earth": "5.1°", "match": 0.91,
-    "note": "LOLA vs ETOPO, both ~1.9 km/px"},
+    "note": "LOLA vs Copernicus DEM, both ~1.9 km/px"},
    {"dimension": "Atmosphere", "moon": "vacuum", "earth": "1 bar", "match": 0.0,
     "note": "Cannot be reproduced on Earth"}
  ]}
@@ -254,8 +254,9 @@ Python is the single source of truth for every score. The browser does no scorin
 ```
 analogatlas/     search core + pipeline library (existing)
   config.py        paths, ~85 km tile scale, endpoints, CLIP model choice
-  tiles.py         Moon (Trek WMTS) + Earth (GIBS WMS) grids at equal ground scale; tile download
-  rasters.py       PDS3 IMG + ETOPO readers; per-tile slope, relief, rock abundance, temperature
+  tiles.py         Moon (Trek WMTS) + Earth grids at equal ground scale; tile download
+  earth_ee.py      Earth Engine: Copernicus DEM hillshade tiles + per-tile slope/relief
+  rasters.py       PDS3 IMG reader (+ ETOPO offline fallback); per-tile slope, relief, rock abundance, temperature
   embed.py         CLIP image/text embeddings; rotation-averaged hillshades; prompt ensembling
   analog.py        search, cross-body matching, NASA POWER lookup, report card  ← what the API wraps
   sites.py         known Earth analogs (known/new tagging) + Moon/Earth presets

@@ -37,7 +37,7 @@ The Moon search index (60°S to 60°N) is built and verified. The Earth side, th
 | Moon physical features | Done | Slope, relief and elevation (LOLA); rock abundance and regolith-temperature anomaly (Diviner) |
 | Moon CLIP embeddings | Done | 512-d image vectors, plus hillshade vectors averaged over four 90° rotations |
 | Moon south pole (> 60°S) | Not started | **Where candidate Moon-base sites are.** See [open decisions](#open-decisions) |
-| Earth side | Not started | Moving to Google Earth Engine. A working fallback path (GIBS tiles + ETOPO elevation) is in the code; 2,294 of its ~11.7k tiles are on Dev A's disk |
+| Earth side | In progress | Earth Engine project `analogatlas-ee` (Community tier). Hillshade tiles + slope/relief from Copernicus DEM via `analogatlas/earth_ee.py`; imagery from GIBS Blue Marble |
 | Search API | Not started | The search logic is in `analogatlas/analog.py`; it needs a FastAPI wrapper |
 | React frontend | Not started | Replaces an earlier Streamlit draft, which has been removed |
 | Radar close study | Not started | Needs RCM or Sentinel-1 scenes and Mini-RF data |
@@ -97,6 +97,12 @@ source .venv/bin/activate
 uv pip install -r requirements.txt
 python scripts/01_tiles.py moon     # ~11k tile requests to NASA Trek
 python scripts/02_features.py moon  # ~5 min on an M1
+
+# Earth side (Earth Engine). Once per machine: earthengine authenticate
+# with a Google account that has access to the project analogatlas-ee.
+python scripts/00_ee_check.py       # should print "Earth Engine OK"
+python scripts/01_tiles.py earth    # ~11.7k hillshades (EE) + Blue Marble (GIBS)
+python scripts/02_features.py earth
 ```
 
 #### Windows
@@ -125,7 +131,7 @@ The next milestone is the Earth index. Every Earth–Moon feature in the app dep
 
 - [ ] **Decide hosting (blocking):** pick the hosts, claim the domain, get continuous deployment running so every push redeploys
 - [ ] Decide the south-pole and Mars questions below
-- [ ] Register Google Earth Engine (non-commercial use) with a Google Cloud project
+- [x] Register Google Earth Engine (non-commercial use): project `analogatlas-ee`
 - [ ] Earth pipeline in Earth Engine: tile grid, Copernicus DEM slope and relief, export a table
 - [ ] Earth tile images (ASTER hillshade + imagery) and their CLIP embeddings
 - [ ] FastAPI wrapper around `analogatlas/analog.py` with `/search`, `/analogs`, `/twins`, `/tile`

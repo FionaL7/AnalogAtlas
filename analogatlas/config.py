@@ -56,5 +56,17 @@ import os  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 load_dotenv(ROOT / ".env")
 
-# Google Earth Engine: the Cloud project registered for non-commercial use.
+# ---- Google Earth Engine (Earth side) -------------------------------------
+# Cloud project registered for non-commercial Earth Engine use, set in .env.
 EE_PROJECT = os.environ.get("EE_PROJECT")
+EE_DEM = "COPERNICUS/DEM/GLO30_2024_1"   # Copernicus DEM, 30 m
+# Slope/relief are measured on the DEM resampled to ~1.85 km, the same
+# baseline as LOLA LDEM_16 (1.9 km/px), so the numbers compare across bodies.
+EARTH_SLOPE_SCALE_M = 1850
+# Hillshade tiles: computed at 118 m (like LOLA 256 ppd), sun 315/45 deg (the
+# Moon tiles' flat-ground grey of ~176 implies a 45 deg sun). Heights are
+# exaggerated x3 only to avoid 8-bit banding; contrast is normalised per tile
+# before embedding anyway (embed.normalize_shade), on both bodies.
+EARTH_SHADE_SCALE_M = 118
+EARTH_SHADE_ZFACTOR = 3
+SUN_AZIMUTH, SUN_ELEVATION = 315, 45

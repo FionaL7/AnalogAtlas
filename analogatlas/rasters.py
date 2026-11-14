@@ -2,9 +2,10 @@
 
 Moon : LRO LOLA LDEM_16 (topography), LRO Diviner GDR L3 rock abundance and
        regolith-temperature anomaly (PDS Geosciences Node).
-Earth: ETOPO 2022 60-arc-second surface elevation.
+Earth: Copernicus DEM via Earth Engine (earth_ee.physical), resampled to
+       1.85 km; ETOPO 2022 60s is the offline fallback.
 
-LOLA LDEM_16 (1.9 km/px) and ETOPO 60s (1.85 km/px) have almost identical
+LOLA LDEM_16 (1.9 km/px) and the 1.85 km Earth DEM have almost identical
 sampling, so slope and relief are measured at the same baseline on both bodies.
 """
 from __future__ import annotations
@@ -101,6 +102,14 @@ def lunar_temperature_model(lat: float) -> dict:
 
 
 def earth_physical(grid: pd.DataFrame) -> pd.DataFrame:
+    if C.EE_PROJECT:
+        from . import earth_ee
+        return earth_ee.physical(grid)
+    return earth_physical_etopo(grid)
+
+
+def earth_physical_etopo(grid: pd.DataFrame) -> pd.DataFrame:
+    """Offline fallback: needs C.ETOPO in data/raw/."""
     import xarray as xr
     ds = xr.open_dataset(C.ETOPO)
     z = ds["z"]

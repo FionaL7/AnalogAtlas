@@ -92,6 +92,9 @@ def _fetch_moon(s, row, layer):
 
 
 def _fetch_earth(s, row, layer):
+    if layer == "shade":                       # hillshade from Earth Engine
+        from . import earth_ee
+        return earth_ee.shade_tile(row, s)
     params = dict(SERVICE="WMS", REQUEST="GetMap", VERSION="1.3.0", STYLES="",
                   LAYERS=C.EARTH_LAYERS[layer], CRS="EPSG:4326",
                   BBOX=f"{row.lat_min},{row.lon_min},{row.lat_max},{row.lon_max}",
@@ -107,6 +110,9 @@ def _fetch_earth(s, row, layer):
 def fetch_tiles(grid: pd.DataFrame, layers=("img", "shade"), workers: int = 12) -> list[str]:
     """Download every (tile, layer) that is not on disk yet. Returns failures."""
     s = _session()
+    if grid.body.iloc[0] == "earth" and "shade" in layers:
+        from . import earth_ee
+        earth_ee._shade_image()                # initialise EE once, before the threads
     jobs = []
     for layer in layers:
         (C.TILES / grid.body.iloc[0] / layer).mkdir(parents=True, exist_ok=True)

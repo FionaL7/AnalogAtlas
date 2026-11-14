@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analogatlas import config as C, rasters  # noqa: E402
-from analogatlas.embed import embed_images  # noqa: E402
+from analogatlas.embed import embed_images, normalize_shade  # noqa: E402
 from analogatlas.tiles import tile_path  # noqa: E402
 
 BATCH = 64
@@ -31,11 +31,14 @@ def colour_stats(paths):
     return g, b
 
 
-def embed_all(paths, rotations):
+def embed_all(paths, shade):
+    """shade=True: contrast-normalise, then average over four rotations."""
     out = []
-    for i in tqdm(range(0, len(paths), BATCH), desc=f"embed ({'rot' if rotations else 'img'})"):
+    for i in tqdm(range(0, len(paths), BATCH), desc=f"embed ({'shade' if shade else 'img'})"):
         ims = [Image.open(p) for p in paths[i:i + BATCH]]
-        out.append(embed_images(ims, rotations=rotations))
+        if shade:
+            ims = [normalize_shade(im) for im in ims]
+        out.append(embed_images(ims, rotations=shade))
     return np.concatenate(out).astype(np.float16)
 
 
@@ -52,4 +55,5 @@ for body in sys.argv[1:] or ["moon", "earth"]:
 
     np.save(C.INDEX / f"{body}_shade.npy", embed_all([tile_path(body, "shade", t) for t in grid.tile_id], True))
     np.save(C.INDEX / f"{body}_img.npy", embed_all([tile_path(body, "img", t) for t in grid.tile_id], False))
+    assert len(np.load(C.INDEX / f"{body}_shade.npy")) == len(np.load(C.INDEX / f"{body}_img.npy")) == len(meta)
     print(f"{body}: done")
