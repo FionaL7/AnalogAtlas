@@ -95,3 +95,51 @@ def test_rcm_box_reads_known_values_and_handles_outside(tmp_path):
 
     outside = rcm_box(tmp_path, 10.0, 10.1, 10.0, 10.1)
     assert outside.cpr_median is None and outside.coverage == 0.0
+
+
+# ---- Sentinel-1 indicator and the close-study helpers (#19)
+def test_s1_ratio_is_vh_over_vv_and_masks_nodata():
+    from analogatlas.radar import s1_ratio
+    out = s1_ratio(np.array([1.0, 0.0, -32768.0, 0.5]), np.array([0.2, 0.1, 0.1, 0.05]))
+    assert out[0] == pytest.approx(0.2) and out[3] == pytest.approx(0.1)
+    assert np.isnan(out[1]) and np.isnan(out[2])
+
+
+def test_summarise_records_which_measure_it_is():
+    s = summarise(np.array([0.1, 0.2]), "s1", measure="s1_vh_vv")
+    assert s.as_dict()["measure"] == "s1_vh_vv"
+    assert summarise(np.array([0.5]), "minirf").as_dict()["measure"] == "cpr"
+
+
+def test_combine_scenes_takes_the_median_of_scene_medians_and_skips_empty():
+    from analogatlas.radar import RoughnessStat, combine_scenes
+    stats = [RoughnessStat(0.1, 0.2, 1.0, 10, "x"), RoughnessStat(0.3, 0.5, 0.8, 10, "x"),
+             RoughnessStat(0.2, 0.4, 0.9, 10, "x"), RoughnessStat(None, None, 0.0, 10, "x")]
+    c = combine_scenes(stats, "src", "cpr")
+    assert c.cpr_median == pytest.approx(0.2) and c.cpr_p90 == pytest.approx(0.4)
+    assert "3 dates" in c.source
+    assert combine_scenes([], "src", "cpr").cpr_median is None
+
+
+def test_slope_deg_on_a_known_ramp():
+    from analogatlas.closestudy import slope_deg
+    z = np.tile(np.arange(5) * 30.0, (5, 1))          # rises 30 m per 30 m pixel: 45 degrees
+    assert np.median(slope_deg(z, 30.0, 30.0)) == pytest.approx(45.0)
+
+
+def test_contains_and_spread():
+    from analogatlas.closestudy import contains, spread
+    box = (10.0, 11.0, 20.0, 21.0)                    # lat_min, lat_max, lon_min, lon_max
+    assert contains([19.5, 9.5, 21.5, 11.5], box)
+    assert not contains([20.5, 9.5, 21.5, 11.5], box)
+    assert spread(list(range(10)), 3) == [0, 4, 9]
+    assert spread([1, 2], 6) == [1, 2]
+
+
+def test_close_study_pairs_name_real_sites():
+    from analogatlas.closestudy import PAIRS
+    from analogatlas.sites import MOON_BASE_REGIONS, MOON_SITES
+    assert 2 <= len(PAIRS) <= 3
+    for p in PAIRS:
+        assert p["site"] in {**MOON_BASE_REGIONS, **MOON_SITES}
+        assert p["earth_tile_id"].startswith("earth_")

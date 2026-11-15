@@ -4,6 +4,7 @@
     python scripts/04_radar.py moon-sites               # CPR for every Moon site
     python scripts/04_radar.py find-rcm 54.56 -63.43    # free RCM scenes over a point
     python scripts/04_radar.py download-rcm <item-id> <folder-name>
+    python scripts/04_radar.py close-study              # the #19 pairs: radar, slope, picture
 
 Moon: NASA LRO Mini-RF global CPR mosaic (PDS). Earth: Canada's RCM CEOS-ARD
 on AWS open data (no account; Canada south of ~70N; a sample of dates, not
@@ -21,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analogatlas import config as C  # noqa: E402
 from analogatlas import radar  # noqa: E402
 from analogatlas.sites import MOON_BASE_REGIONS, MOON_SITES  # noqa: E402
+from analogatlas import closestudy as CS  # noqa: E402
 
 MINIRF_URL = ("https://pds-geosciences.wustl.edu/lro/lro-l-mrflro-5-global-mosaic-v1/"
               "lromrf_1001/data/32ppd/global_cpr_32ppd_simp_0c")
@@ -93,6 +95,50 @@ def download_rcm(item_id: str, folder: str) -> None:
     print(f"scene in {dest} ({f['properties']['datetime'][:10]})")
 
 
+def close_study() -> None:
+    """Measure every pair in closestudy.PAIRS -> data/index/close_study.json,
+    plus one Sentinel-2 picture per pair in data/index/close_study/.
+
+    Needs rasterio and pandas (Docker on rishabh-win, see the skill), the
+    Mini-RF map, and the RCM scenes named in PAIRS (download-rcm)."""
+    import pandas as pd
+    earth = pd.read_parquet(C.INDEX / "earth_meta.parquet").set_index("tile_id")
+    moon_sites = {**MOON_BASE_REGIONS, **MOON_SITES}
+    out = []
+    for pair in CS.PAIRS:
+        row = earth.loc[pair["earth_tile_id"]]
+        tile = dict(tile_id=pair["earth_tile_id"], lat=float(row.lat), lon=float(row.lon))
+        box = CS.earth_box(tile)
+        site_lat, site_lon = moon_sites[pair["site"]]
+        print(f"{pair['id']}: {pair['site']} <-> {pair['earth_name']}")
+
+        moon = CS.moon_roughness((site_lat, site_lon))
+        s1 = CS.s1_roughness(box, pair["s1_dates"])
+        cpr = CS.rcm_roughness(box, pair["rcm_scenes"]) if pair.get("rcm_scenes") else None
+        slope = CS.dem_slope(box)
+        pic = CS.s2_picture(box, pair["s2_dates"], CS.OUT_DIR / f"{pair['id']}_s2.jpg")
+        fmt = lambda r: "none" if r is None or r.cpr_median is None else f"{r.cpr_median:.3f} ({r.coverage:.0%})"  # noqa: E731
+        print(f"  Moon CPR {fmt(moon)} | Earth CPR {fmt(cpr)} | Earth S1 VH/VV {fmt(s1)} | "
+              f"30 m slope {slope['slope_med']} deg | picture {pic and pic['date']}")
+
+        out.append(dict(
+            **{k: v for k, v in pair.items() if k not in ("s1_dates", "s2_dates", "rcm_scenes")},
+            site_lat=site_lat, site_lon=site_lon,
+            earth_lat=tile["lat"], earth_lon=tile["lon"],
+            box=dict(half_km=CS.HALF_KM, lat_min=box[0], lat_max=box[1], lon_min=box[2], lon_max=box[3]),
+            radar=dict(
+                moon=dict(moon.as_dict(), box_half_km=CS.HALF_KM),
+                earth_cpr=None if cpr is None else dict(cpr.as_dict(), box_half_km=CS.HALF_KM,
+                                                        scenes=pair["rcm_scenes"]),
+                earth_s1=dict(s1.as_dict(), box_half_km=CS.HALF_KM, dates=pair["s1_dates"]),
+            ),
+            earth_slope_30m=slope,
+            picture=pic,
+        ))
+    CS.OUT_JSON.write_text(json.dumps(out, indent=2))
+    print(f"wrote {CS.OUT_JSON}")
+
+
 if __name__ == "__main__":
     cmd, args = (sys.argv[1] if len(sys.argv) > 1 else ""), sys.argv[2:]
     if cmd == "download-minirf":
@@ -103,5 +149,7 @@ if __name__ == "__main__":
         find_rcm(float(args[0]), float(args[1]))
     elif cmd == "download-rcm" and len(args) == 2:
         download_rcm(*args)
+    elif cmd == "close-study":
+        close_study()
     else:
         sys.exit(__doc__)

@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 
 import { apiMode } from "./lib/api";
 import { Atlas } from "./routes/Atlas";
+import { CloseStudyPage } from "./routes/CloseStudy";
 import { Data } from "./routes/Data";
 import { Discoveries } from "./routes/Discoveries";
 import { Methodology } from "./routes/Methodology";
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/sites" element={<Sites />} />
           <Route path="/sites/:id" element={<SiteGuide />} />
           <Route path="/discoveries" element={<Discoveries />} />
+          <Route path="/close-study/:id" element={<CloseStudyPage />} />
           <Route path="/traps" element={<Traps />} />
           <Route path="/methodology" element={<Methodology />} />
           <Route path="/data" element={<Data />} />

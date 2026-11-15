@@ -96,6 +96,8 @@ export interface TwinsResponse {
   /** What to test at the Earth site. Absent from older exports. */
   field_tests?: FieldTests | null;
   model_score?: number | null;
+  /** Only on the close-study pairs (#19). */
+  close_study?: CloseStudy;
 }
 
 /** Static export: tiles/{body}.json (§4.2). One cell of the map grid. */
@@ -276,4 +278,47 @@ export interface PortfolioFile {
   uncovered: string[];
   best_single_site: { tile_id: string; covers: number } | null;
   candidates: number;
+}
+
+/** One radar measurement for a 30 km box. The median/p90 keep their cpr_
+ * names for every measure: read `measure` before comparing two of them. */
+export interface RadarStat {
+  cpr_median: number | null;
+  cpr_p90: number | null;
+  coverage: number;
+  n_pixels: number;
+  source: string;
+  /** "cpr" (Mini-RF, RCM) or "s1_vh_vv" (Sentinel-1 cross-pol ratio, not CPR). */
+  measure: "cpr" | "s1_vh_vv";
+  box_half_km: number;
+  dates?: string;
+  scenes?: string[];
+}
+
+/** The close-study block (#19), in twins/*.json and close_study.json. */
+export interface CloseStudy {
+  id: string;
+  headline: string;
+  earth_name: string;
+  why_picked: string;
+  /** Position among the site's new (not known) Earth analogs, 1 = best. */
+  rank_among_new: number | null;
+  nearest_known: { name: string; km: number };
+  box: { half_km: number; lat_min?: number; lat_max?: number; lon_min?: number; lon_max?: number };
+  radar: { moon: RadarStat; earth_cpr: RadarStat | null; earth_s1: RadarStat };
+  earth_slope_30m: { slope_med: number | null; slope_p90: number | null; n_pixels: number; source: string };
+  picture: { url: string; date: string; source: string; cloud_pct: number } | null;
+}
+
+/** Static export: close_study.json, one entry per pair. */
+export interface CloseStudyEntry extends CloseStudy {
+  site_id: string;
+  site_name: string;
+  site_body: Body;
+  earth_tile_id: string;
+  earth_lat: number;
+  earth_lon: number;
+  /** Path of the full report card, e.g. /data/twins/{site}__{tile}.json */
+  twin: string;
+  model_score: number | null;
 }

@@ -28,7 +28,7 @@ Scope: the Moon first. How much Mars gets is an [open decision](#open-decisions)
 
 ## Status
 
-Search works end to end on real data: Moon, south pole and Earth indexes, the API, the static export and the app. Still open: the Earth half of the radar close study (#19) and Mars (#7).
+Search works end to end on real data: Moon, south pole and Earth indexes, the API, the static export and the app. Still open: Mars (#7).
 
 | Piece | State | Notes |
 | --- | --- | --- |
@@ -43,7 +43,7 @@ Search works end to end on real data: Moon, south pole and Earth indexes, the AP
 | Analog portfolio | Done | `analogatlas/portfolio.py`, exported as `portfolio/{site_id}.json` for all 21 lunar targets; each fully covered by 2–4 Earth sites ([#31](https://github.com/FionaL7/AnalogAtlas/issues/31)). Shown on each field guide; slide figure `docs/figures/portfolio.png` (`scripts/05_portfolio_figure.py`). **If #32 changes scoring, re-run `03_export.py` and `05_portfolio_figure.py`** |
 | Search API | Done | `api/`: `/search`, `/analogs`, `/twins` (with field tests and model score), `/tile` |
 | React frontend | Done | Atlas (site, map-click and text/picture search, report card with tile pictures and field tests), field guides, discoveries, traps, methodology with validation, data and credits ([#34](https://github.com/FionaL7/AnalogAtlas/issues/34)) |
-| Radar close study | Moon done | Mini-RF CPR for every lunar site (`radar.json`). Earth RCM/Sentinel-1 side pending ([#19](https://github.com/FionaL7/AnalogAtlas/issues/19)) |
+| Radar close study | Done | Mini-RF CPR for every lunar site (`radar.json`). 3 new pairs measured up close: radar on both bodies, 30 m slope, Sentinel-2 picture, full report card, page at `/close-study/:id`. Pairs and why: `analogatlas/closestudy.py` ([#19](https://github.com/FionaL7/AnalogAtlas/issues/19)) |
 | Mars | Not started | |
 
 **Verification.** Three text queries on the Moon index returned the expected terrain, and slopes measured independently from LOLA elevation data agree:
