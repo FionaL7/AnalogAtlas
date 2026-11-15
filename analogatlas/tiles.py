@@ -29,21 +29,32 @@ def _session() -> requests.Session:
 
 
 # ---------------------------------------------------------------- grids ----
-def moon_grid() -> pd.DataFrame:
-    """Trek WMTS zoom-6 tiles whose centre lies within +/-MOON_MAX_ABS_LAT."""
-    z, d = C.MOON_ZOOM, C.MOON_TILE_DEG
+def _eq_grid(body: str, z: int, max_abs_lat: float) -> pd.DataFrame:
+    """Trek WMTS equirectangular tiles whose centre lies within +/-max_abs_lat."""
+    d = 180.0 / 2 ** z
     rows = []
     for y in range(2 ** z):
         lat = 90 - (y + 0.5) * d
-        if abs(lat) > C.MOON_MAX_ABS_LAT:
+        if abs(lat) > max_abs_lat:
             continue
         for x in range(2 ** (z + 1)):
             lon = -180 + (x + 0.5) * d
-            rows.append(dict(tile_id=f"moon_{z}_{y}_{x}", body="moon", z=z, y=y, x=x,
+            rows.append(dict(tile_id=f"{body}_{z}_{y}_{x}", body=body, z=z, y=y, x=x,
                              lat=lat, lon=lon,
                              lat_min=lat - d / 2, lat_max=lat + d / 2,
                              lon_min=lon - d / 2, lon_max=lon + d / 2))
     return pd.DataFrame(rows)
+
+
+def moon_grid() -> pd.DataFrame:
+    """Trek WMTS zoom-6 tiles whose centre lies within +/-MOON_MAX_ABS_LAT."""
+    return _eq_grid("moon", C.MOON_ZOOM, C.MOON_MAX_ABS_LAT)
+
+
+def mars_grid() -> pd.DataFrame:
+    """Trek zoom-7 tiles within +/-MARS_MAX_ABS_LAT: the same tile matrix as
+    the Moon, one zoom level down, so the ground size stays ~83 km (#37)."""
+    return _eq_grid("mars", C.MARS_ZOOM, C.MARS_MAX_ABS_LAT)
 
 
 # ------------------------------------------------ south polar projection ----
@@ -159,17 +170,22 @@ def tile_path(body: str, layer: str, tile_id: str):
     return C.TILES / body / layer / f"{tile_id}.{ext}"
 
 
-def _fetch_moon(s, row, layer):
+EQ_LAYERS = {"moon": C.MOON_LAYERS, "mars": C.MARS_LAYERS}
+
+
+def _fetch_eq(s, row, layer):
     """One chip, mosaicked across longitude so it is square in kilometres."""
     n = int(math.ceil(_lon_window_px(row.lat) / C.TILE_PX))
     n += 1 - n % 2                       # odd, so row.x stays in the middle
     across = 2 ** (row.z + 1)
-    strip = Image.new("L", (n * C.TILE_PX, C.TILE_PX))
+    # The Viking mosaic is colour, like Blue Marble on Earth's look channel.
+    mode = "RGB" if row.body == "mars" and layer == "img" else "L"
+    strip = Image.new(mode, (n * C.TILE_PX, C.TILE_PX))
     for i in range(n):
-        url = C.MOON_LAYERS[layer].format(z=row.z, y=row.y, x=(row.x + i - n // 2) % across)
+        url = EQ_LAYERS[row.body][layer].format(z=row.z, y=row.y, x=(row.x + i - n // 2) % across)
         r = s.get(url, timeout=30)
         r.raise_for_status()
-        strip.paste(Image.open(io.BytesIO(r.content)).convert("L"), (i * C.TILE_PX, 0))
+        strip.paste(Image.open(io.BytesIO(r.content)).convert(mode), (i * C.TILE_PX, 0))
     return _square_chip(strip, row.lat)
 
 
@@ -237,7 +253,8 @@ def _fetch_earth(s, row, layer):
     return img.convert("L" if layer == "shade" else "RGB")
 
 
-FETCHERS = {"moon": _fetch_moon, "moon_polar": _fetch_moon_polar, "earth": _fetch_earth}
+FETCHERS = {"moon": _fetch_eq, "mars": _fetch_eq, "moon_polar": _fetch_moon_polar,
+            "earth": _fetch_earth}
 
 
 def fetch_tiles(grid: pd.DataFrame, layers=("img", "shade"), workers: int = 12) -> list[str]:

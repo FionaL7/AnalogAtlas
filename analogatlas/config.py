@@ -9,8 +9,10 @@ INDEX = DATA / "index"        # parquet metadata + embedding matrices
 
 # ---- Body constants -------------------------------------------------------
 MOON_RADIUS_M = 1_737_400.0
+MARS_RADIUS_M = 3_389_500.0
 EARTH_RADIUS_M = 6_371_000.0
 MOON_KM_PER_DEG = 2 * 3.141592653589793 * MOON_RADIUS_M / 1000 / 360    # ~30.3
+MARS_KM_PER_DEG = 2 * 3.141592653589793 * MARS_RADIUS_M / 1000 / 360    # ~59.2
 EARTH_KM_PER_DEG = 2 * 3.141592653589793 * EARTH_RADIUS_M / 1000 / 360  # ~111.2
 
 # ---- Tiling ----------------------------------------------------------------
@@ -19,6 +21,12 @@ MOON_ZOOM = 6
 MOON_TILE_DEG = 180.0 / 2 ** MOON_ZOOM                 # 2.8125
 TILE_KM = MOON_TILE_DEG * MOON_KM_PER_DEG              # ~85 km
 MOON_MAX_ABS_LAT = 60.0     # Diviner GDR L3 cylindrical products cover +/-60
+# Mars tiles are Trek zoom-7 tiles: 1.40625 deg ~= 83 km, so features are
+# compared at (almost) the same ground scale as the ~85 km Moon/Earth tiles.
+MARS_ZOOM = 7
+MARS_TILE_DEG = 180.0 / 2 ** MARS_ZOOM                 # 1.40625
+MARS_TILE_KM = MARS_TILE_DEG * MARS_KM_PER_DEG         # ~83 km
+MARS_MAX_ABS_LAT = 60.0     # all 7 target sites (TARGET-SITES.md) are inside
 # Earth tiles are requested from GIBS WMS with the same ground size (~85 km).
 EARTH_TILE_DEG_LAT = TILE_KM / EARTH_KM_PER_DEG        # ~0.77 deg
 EARTH_GRID_STEP_DEG = 1.0
@@ -53,6 +61,13 @@ MOON_LAYERS = {
     "img": f"{TREK}/LRO_WAC_Mosaic_Global_303ppd_v02/1.0.0/default/default028mm/{{z}}/{{y}}/{{x}}.jpg",
     # LOLA hillshade (terrain shape)
     "shade": f"{TREK}/LRO_LOLA_Shade_Global_256ppd_v06/1.0.0/default/default028mm/{{z}}/{{y}}/{{x}}.png",
+}
+TREK_MARS = "https://trek.nasa.gov/tiles/Mars/EQ"
+MARS_LAYERS = {
+    # Viking MDIM 2.1 colour mosaic (imagery)
+    "img": f"{TREK_MARS}/Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/default/default028mm/{{z}}/{{y}}/{{x}}.jpg",
+    # MOLA + HRSC blended hillshade (terrain shape)
+    "shade": f"{TREK_MARS}/Mars_MOLA_blend200ppx_HRSC_Shade_clon0dd_200mpp_lzw/1.0.0/default/default028mm/{{z}}/{{y}}/{{x}}.jpg",
 }
 GIBS_WMS = "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi"
 EARTH_LAYERS = {
