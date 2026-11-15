@@ -371,6 +371,36 @@ def mars_analog_ranking(earth: analog.BodyIndex, mars: analog.BodyIndex,
     }
 
 
+def channel_verdict(per_analog: dict[str, list[float]], n_boot: int = 4000, seed: int = 0) -> dict:
+    """Does any visual channel beat the shipped hillshade-only one by more than noise?
+
+    `per_analog`: channel label -> top-% per known analog, in the same analog
+    order for every channel (so they can be paired). The lowest median is
+    the `best` channel; but with a few dozen analogs a gap of about a point
+    is easily noise, so a switch is recommended only when a paired bootstrap
+    over the analogs puts the whole 95% interval of the median gap
+    (shade-only minus best) above zero.
+    """
+    medians = {k: float(np.median(v)) for k, v in per_analog.items()}
+    best = min(medians, key=medians.get)
+    if best == "shade_only":
+        return {"best": best, "gap_ci95": None,
+                "recommendation": "keep the shipped shade-only visual channel for mars"}
+    shade, other = np.asarray(per_analog["shade_only"]), np.asarray(per_analog[best])
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(shade), size=(n_boot, len(shade)))
+    gaps = np.median(shade[idx], axis=1) - np.median(other[idx], axis=1)
+    lo, hi = (round(float(x), 2) for x in np.percentile(gaps, [2.5, 97.5]))
+    if lo > 0:
+        rec = (f"{best} beats shade-only beyond noise (95% interval for the median gap "
+               f"{lo} to {hi} points); consider changing analog.cross_body")
+    else:
+        rec = (f"keep the shipped shade-only visual channel for mars: {best} has the lowest "
+               f"median, but the gap to shade-only is within noise (95% interval {lo} to {hi} "
+               f"points over {len(shade)} analogs)")
+    return {"best": best, "gap_ci95": [lo, hi], "recommendation": rec}
+
+
 def mars_visual_channels(earth: analog.BodyIndex, mars: analog.BodyIndex,
                          w_phys: float = 0.3) -> dict:
     """Shade-only vs look-only vs mixed visual channel, judged by the same
@@ -380,27 +410,25 @@ def mars_visual_channels(earth: analog.BodyIndex, mars: analog.BodyIndex,
     testable, _ = _mars_testable(earth)
     testable = [(name, roles, rows) for name, roles, rows in testable
                 if "mars" in ANALOG_INFO[name]["target"] and roles]
-    channels = {}
+    channels, per_analog = {}, {}
     for label, w_shade in (("shade_only", 1.0), ("look_only", 0.0), ("mixed_0.6", 0.6)):
         pcts = []
         for name, roles, rows in testable:
             best = min(_mars_best_rank(mars, MARS_SITES[s], earth, rows, w_phys, w_shade)[0]
                        for role in roles for s in MARS_ROLE_SITES[role][1])
             pcts.append(100 * (best - 1) / n)
+        per_analog[label] = pcts
         channels[label] = {"median_top_pct": round(float(np.median(pcts)), 2),
                            "mean_top_pct": round(float(np.mean(pcts)), 2),
                            "in_top_5pct": int(sum(p <= 5 for p in pcts)),
                            "n": len(pcts)}
-    best_label = min(channels, key=lambda k: channels[k]["median_top_pct"])
+    verdict = channel_verdict(per_analog)
     return {
         "note": ("the shipped cross-body ranking uses the hillshade channel alone "
                  "(w_shade=1); this measures what the Viking look channel would add, "
                  f"at w_phys={w_phys}, over the Mars-target analogs"),
         "channels": channels,
-        "best": best_label,
-        "recommendation": ("keep the shipped shade-only visual channel for mars"
-                           if best_label == "shade_only" else
-                           f"{best_label} beats shade-only; consider changing analog.cross_body"),
+        **verdict,
     }
 
 

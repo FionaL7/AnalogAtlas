@@ -404,7 +404,7 @@ export function Methodology() {
         <dt className="font-medium text-ink">Terrain %</dt>
         <dd>How alike the two landscapes look in shape, as a percentile of all tiles. 99% means only 1% of tiles look more alike.</dd>
         <dt className="font-medium text-ink">Physical %</dt>
-        <dd>How close the measured slope and relief are (plus albedo for Mars). 100% means the same values.</dd>
+        <dd>How close the measured slope and relief are. For Mars it also counts albedo and dryness, and for ice sites frozen ground. 100% means the same values.</dd>
         <dt className="font-medium text-ink">Model %</dt>
         <dd>The analog model's percentile: how much the Earth tile resembles places already used as analogs.</dd>
         <dt className="font-medium text-ink">Look ↔ Measurements</dt>
