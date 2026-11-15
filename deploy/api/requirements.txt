@@ -1,0 +1,11 @@
+# API runtime only (torch is installed CPU-only by the Dockerfile).
+open_clip_torch
+numpy
+pandas
+pyarrow
+pillow
+requests
+tqdm
+python-dotenv==1.2.4
+fastapi
+uvicorn[standard]

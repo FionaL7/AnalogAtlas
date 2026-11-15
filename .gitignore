@@ -18,3 +18,4 @@ web/*.tsbuildinfo
 
 # static export: produced at deploy time by scripts/03_export.py, never committed
 web/public/data/
+.build-stamp

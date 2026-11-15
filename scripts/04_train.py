@@ -37,10 +37,21 @@ variants = {
     "Physics + environment only": learn.build_features(earth, parts=("phys", "env")),
 }
 
+# Extra checks (see validation.json "checks_note"): a one-column baseline the
+# model must beat, and hold-one-out that also hides nearby known sites.
+BARE = "Bare ground only (no learning)"
+REGION = "Our model, sites within 1,500 km also hidden"
+
 scores = pd.DataFrame({"tile_id": earth.meta.tile_id})
 val = {"method": "PU logistic regression, hold-one-out over known surface analog sites",
        "note": f"C={learn.C_REG} picked by the same hold-one-out sweep, so results are slightly optimistic",
-       "random_baseline_top_pct": 50.0, "targets": {}}
+       "random_baseline_top_pct": 50.0,
+       "checks_note": (f"'{BARE}' ranks tiles by bare-ground fraction alone: the model must beat it to claim "
+                       f"more than 'barren and dry'. '{REGION}' hides every known site within 1,500 km of the "
+                       "test site, so the model can't score by learning where sites cluster; it is the closer "
+                       "proxy for an unseen region. 'random_sites_control': hold-one-out medians when random "
+                       "tiles pose as known sites; ~50 means the method doesn't find signal in noise."),
+       "targets": {}}
 
 for target in (None, "moon", "mars"):
     key = target or "all"
@@ -48,6 +59,8 @@ for target in (None, "moon", "mars"):
     print(f"\n== {key}: {len(sites)} sites with a land tile")
     res = {name: learn.holdout(F, sites) for name, F in variants.items()}
     res["Image similarity only (no learning)"] = learn.holdout_visual_baseline(earth, sites)
+    res[BARE] = learn.holdout_single_column(earth.meta, sites, "barren_frac")
+    res[REGION] = learn.holdout_region(F_full, sites, earth.meta)
     for name, df in res.items():
         print(f"  {name:45s} {summary(df)}")
 
@@ -64,8 +77,13 @@ for target in (None, "moon", "mars"):
         "sites_used": list(sites),
         "summary": {name: summary(df) for name, df in res.items()},
         "per_site": full.drop(columns="tile_row").round(1).to_dict(orient="records"),
+        "per_site_region_hidden": res[REGION].drop(columns="tile_row").round(1).to_dict(orient="records"),
         "weights": learn.weights(model, F_full).round(3).to_dict(orient="records"),
     }
+
+n_all = len(learn.site_tiles(earth))
+val["random_sites_control"] = {"n_sites": n_all, "runs_median_top_pct": learn.random_sites_control(F_full, n_all)}
+print(f"\nrandom-sites control (should be ~50): {val['random_sites_control']['runs_median_top_pct']}")
 
 val["skipped_sites"] = {
     n: ("process analog (surface unlike Moon/Mars)" if not ANALOG_INFO[n]["surface"] else "no land tile (island)")
@@ -83,13 +101,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 summ = val["targets"]["all"]["summary"]
-order = ["Image similarity only (no learning)", "CLIP only (learned)",
-         "Physics + environment only", "Our model (shape + physics + environment)"]
+order = ["Image similarity only (no learning)", BARE, "CLIP only (learned)",
+         "Physics + environment only", REGION, "Our model (shape + physics + environment)"]
 INK, MUTED, BLUE, GREY, SURF = "#0b0b0b", "#52514e", "#2a78d6", "#b8b7b1", "#fcfcfb"
-fig, ax = plt.subplots(figsize=(10, 4.2), facecolor=SURF)
+fig, ax = plt.subplots(figsize=(10, 5.2), facecolor=SURF)
 ax.set_facecolor(SURF)
 vals = [summ[k]["median_top_pct"] for k in order]
-colors = [BLUE if k.startswith("Our") else GREY for k in order]
+colors = [BLUE if k.startswith("Our model (") else "#8fb8e8" if k == REGION else GREY for k in order]
 ax.barh(range(len(order)), vals, color=colors, height=0.55)
 ax.axvline(50, color=MUTED, lw=1, ls="--")
 ax.text(50.8, -0.25, "random guess", color=MUTED, fontsize=9, va="center")

@@ -28,6 +28,17 @@ const BASE: string = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 export const isLive = () => BASE !== "";
 export const apiMode = (): "live" | "mock" => (isLive() ? "live" : "mock");
 
+/**
+ * Fire-and-forget /health on page load. The API runs on Cloud Run scaled to
+ * zero, so the first request after idle waits for a cold start; starting it
+ * now means it is usually up by the time someone types a search. Errors are
+ * ignored: the static pages don't need it.
+ */
+export function wakeApi(): void {
+  if (!isLive()) return;
+  fetch(`${BASE}/health`).catch(() => {});
+}
+
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
     super(message);

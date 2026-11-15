@@ -1,0 +1,8 @@
+# Only deploy/api/, analogatlas/, api/ and .build-stamp go into the API image.
+*
+!deploy/api/requirements.txt
+!deploy/api/fetch_data.py
+!analogatlas/
+!api/
+!.build-stamp
+**/__pycache__

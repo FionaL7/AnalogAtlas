@@ -4,6 +4,9 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "./App";
 import "./index.css";
+import { wakeApi } from "./lib/api";
+
+wakeApi();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
