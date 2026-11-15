@@ -1,0 +1,9 @@
+# What scripts/03_export.py imports. No torch: the export reads saved embeddings.
+numpy
+pandas
+pyarrow
+requests
+python-dotenv
+fastapi
+pillow
+tqdm

@@ -1,0 +1,37 @@
+# Build the frontend and deploy it to Firebase Hosting (#45).
+# Run by the Cloud Build trigger `deploy-web` on pushes to main that touch the
+# app or the export, and by `scripts/data.py push index` after new data.
+# Setup and gotchas: docs/DEPLOY.md.
+# Note: `$` starts a substitution here, so shell variables must be written `$$`.
+
+substitutions:
+  _REGION: us-central1
+  _API_SERVICE: analogatlas-api
+  _REPO_SLUG: FionaL7/AnalogAtlas
+
+steps:
+  # The API URL comes from Cloud Run itself, so it is never written into the repo.
+  - id: api-url
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args: ["-c", "gcloud run services describe ${_API_SERVICE} --region=${_REGION} --format='value(status.url)' > api_url && cat api_url"]
+
+  # data/index/ from the `data` release -> web/public/data/ (gitignored, #34).
+  - id: export
+    name: python:3.12-slim
+    entrypoint: bash
+    args: ["-c", "pip install -q --no-cache-dir -r deploy/web/requirements.txt && python deploy/web/fetch_index.py ${_REPO_SLUG} && python scripts/03_export.py"]
+
+  - id: build
+    name: node:22
+    entrypoint: bash
+    args: ["-c", "cd web && npm ci --no-audit --no-fund && VITE_API_BASE=$$(cat ../api_url) npm run build"]
+
+  - id: deploy
+    name: node:22
+    entrypoint: bash
+    args: ["-c", "npx -y firebase-tools@14 deploy --only hosting --project ${PROJECT_ID} --non-interactive"]
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1800s
