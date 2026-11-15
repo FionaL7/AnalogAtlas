@@ -199,6 +199,9 @@ Row order in the two `.npy` files matches `_meta.parquet` exactly. Nothing re-so
 | `ndvi` | earth | MODIS NDVI 2015–24 | Vegetation |
 | `ice_frac`, `barren_frac`, `sparse_frac`, `veg_frac`, `water_frac`, `urban_frac` | earth | MODIS MCD12Q1 2023 | Land-cover fractions; `sparse_frac` = open shrubland + grassland (desert scrub), `veg_frac` = forest, savanna, crops. `ice_frac` flags ice sheets, which look like smooth lunar plains but aren't rock |
 | `access_min` | earth | Oxford/MAP accessibility 2015 | Travel time to the nearest city, minutes (10th percentile in the tile = its most reachable part). NaN = no data (mostly Antarctica) |
+| `lst_mean_c` | earth | MODIS LST 2015–24 | Mean of the day and night means, °C. Below 0 = frozen ground: the Earth side of Mars ground ice ([#39](https://github.com/FionaL7/AnalogAtlas/issues/39)) |
+| `albedo` | earth | MODIS MCD43A3 2020–22 (Earth Engine) | White-sky shortwave albedo, 0–1. Compared with TES albedo on Mars. Seasonal snow is in the mean |
+| `dust_aod` | earth | MERRA-2 `DUEXTTAU` 2020–22 (Earth Engine) | Dust optical depth at 550 nm, one field a day (12 UTC). Dust in the air, set against dust on the ground on Mars (TES dust cover index): a stand-in, not the same quantity |
 
 `moon_polar` has no `rock_abundance` or `regolith_t_anom`: the Diviner cylindrical products stop at ±60°. `breakdown()` already guards on the column being present, so those rows are simply absent rather than faked.
 
