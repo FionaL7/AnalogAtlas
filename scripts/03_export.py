@@ -12,7 +12,8 @@ Reads data/index/ and writes, under --out:
 
     sites.json                     targets and known Earth analogs
     dimensions.json                the report card's dimensions
-    tiles/{body}.json              per-tile geometry + features for the map
+    tiles/{body}.json              per-tile geometry + features for the map (moon,
+                                   moon_polar, mars and earth, where the index exists)
     analogs/{site_id}.json         top-k Earth analogs per site (or Moon, reversed)
     twins/{site}__{tile}.json      report cards, climate baked in
     validation.json                copied from data/index/ if #16 has produced it
@@ -39,7 +40,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analogatlas import analog, config as C, fieldtest, portfolio, tiles, traps  # noqa: E402
 from analogatlas.sites import (  # noqa: E402
-    EARTH_PRESETS, KNOWN_EARTH_ANALOGS, MOON_BASE_REGIONS, MOON_SITES,
+    EARTH_PRESETS, KNOWN_EARTH_ANALOGS, MARS_SITE_BLURBS, MARS_SITES, MOON_BASE_REGIONS, MOON_SITES,
 )
 from api.indices import annotate_known  # noqa: E402  (shared so the export and API agree)
 
@@ -48,6 +49,11 @@ TILE_COLUMNS = ["tile_id", "lat", "lon", "lat_min", "lat_max", "lon_min", "lon_m
 # The polar map pane draws in polar stereographic metres, not lat/lon.
 POLAR_TILE_COLUMNS = ["x_m", "y_m", "size_m", "psr_frac", "avg_illum", "illum_max",
                       "earth_vis"]
+# What the Mars field guide shows (docs/MARS-PLAN.md contract).
+MARS_TILE_COLUMNS = ["thermal_inertia", "albedo", "dust_index", "weh_pct", "hydrous_count"]
+# The #29 model's score column for each source body's target.
+MODEL_SCORE_COLUMN = {"moon": "analog_score_moon", "moon_polar": "analog_score_moon",
+                      "mars": "analog_score_mars"}
 
 
 def slug(name: str) -> str:
@@ -99,7 +105,7 @@ def moon_polar_trek_tile_url(lat: float, lon: float) -> str:
         z=C.MOON_SP_ZOOM, y=int((oy - float(y_m)) // tile_m), x=int((float(x_m) - ox) // tile_m))
 
 
-def build_sites(moon_in_index, polar_in_index) -> list[dict]:
+def build_sites(moon_in_index, polar_in_index, mars_in_index=lambda lat: False) -> list[dict]:
     """Every target and known analog, with ids the frontend routes on.
 
     Moon base regions are all poleward of 80°S, so they belong to the
@@ -119,6 +125,12 @@ def build_sites(moon_in_index, polar_in_index) -> list[dict]:
         out.append(dict(id=slug(name), body="moon", name=name, lat=lat, lon=lon,
                         is_base_region=False, in_index=bool(moon_in_index(lat)),
                         tile_url=moon_trek_tile_url(lat, lon)))
+    for name, (lat, lon) in MARS_SITES.items():
+        # Without a Mars index the sites still export, with in_index false, so
+        # the app lists them and says plainly that they have no analogs yet.
+        out.append(dict(id=slug(name), body="mars", name=name, lat=lat, lon=lon,
+                        is_base_region=False, in_index=bool(mars_in_index(lat)),
+                        blurb=MARS_SITE_BLURBS.get(name)))
     for name, (lat, lon) in EARTH_PRESETS.items():
         out.append(dict(id=slug(name), body="earth", name=name, lat=lat, lon=lon,
                         is_base_region=False, in_index=True))
@@ -136,21 +148,33 @@ def build_sites(moon_in_index, polar_in_index) -> list[dict]:
 
 # ---------------------------------------------------------- dimensions ------
 def build_dimensions(moon: analog.BodyIndex, earth: analog.BodyIndex,
-                     climate: dict | None, polar: analog.BodyIndex | None = None) -> list[dict]:
+                     climate: dict | None, polar: analog.BodyIndex | None = None,
+                     mars: analog.BodyIndex | None = None) -> list[dict]:
     """Derived from what `analog.breakdown()` actually returns, not hand-listed,
-    so rows added there (#20, #26) appear here without a second list to maintain."""
+    so rows added there (#20, #26, #44) appear here without a second list to
+    maintain. `bodies` says which worlds a row appears for: a dimension such as
+    Atmosphere is on both, with different values."""
     earth_row = earth.meta.iloc[0].copy()
     earth_row["visual_cos_scaled"] = 0.5
-    rows = analog.breakdown(moon.meta.iloc[0], earth_row, climate)
+    rows = analog.breakdown(moon.meta.iloc[0], earth_row, climate).assign(world="moon")
     if polar is not None:
         # the polar-only dimensions (illumination, permanent shadow, comms)
         # exist only for a moon_polar row, so collect them from one too
-        polar_rows = analog.breakdown(polar.meta.iloc[0], earth_row, climate)
-        rows = pd.concat([rows, polar_rows]).drop_duplicates(subset="dimension")
+        polar_rows = analog.breakdown(polar.meta.iloc[0], earth_row, climate).assign(world="moon")
+        rows = pd.concat([rows, polar_rows])
+    if mars is not None:
+        # Mars rows depend on the tile (ground ice, minerals), so take them
+        # from every Mars tile until each row has been seen once
+        for i in range(len(mars.meta)):
+            mars_rows = analog.breakdown(mars.meta.iloc[i], earth_row, climate).assign(world="mars")
+            rows = pd.concat([rows, mars_rows])
+    worlds = rows.groupby("dimension", sort=False).world.agg(lambda w: sorted(set(w)))
+    rows = rows.drop_duplicates(subset="dimension")
     out = []
     for row in rows.itertuples():
         out.append(dict(
             id=slug(row.dimension), label=row.dimension, note=row.note,
+            bodies=worlds[row.dimension],
             # breakdown() marks each row's kind (#20); group on it, never on
             # match == 0, which a real comparison can also score.
             kind=row.kind,
@@ -174,7 +198,8 @@ def load_model_scores(column: str = "analog_score_moon") -> dict[str, float] | N
 
 
 def export_tiles(idx: analog.BodyIndex, body: str, out: Path) -> int:
-    wanted = TILE_COLUMNS + (POLAR_TILE_COLUMNS if body == "moon_polar" else [])
+    extra = {"moon_polar": POLAR_TILE_COLUMNS, "mars": MARS_TILE_COLUMNS}.get(body, [])
+    wanted = TILE_COLUMNS + extra
     cols = [c for c in wanted if c in idx.meta.columns]
     rows = []
     for row in idx.meta[cols + (["known_analog"] if body == "earth" else [])].itertuples(index=False):
@@ -195,6 +220,9 @@ def export_tiles(idx: analog.BodyIndex, body: str, out: Path) -> int:
             tile["xy"] = [clean(d.get("x_m"), 1), clean(d.get("y_m"), 1),
                           clean(d.get("size_m"), 1)]
             for c in ("psr_frac", "avg_illum", "illum_max", "earth_vis"):
+                tile[c] = clean(d.get(c), 4)
+        if body == "mars":
+            for c in MARS_TILE_COLUMNS:
                 tile[c] = clean(d.get(c), 4)
         rows.append(tile)
     return write_json(out / "tiles" / f"{body}.json", rows)
@@ -233,7 +261,7 @@ def export_twins(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
     """Report cards for the pairs the demo opens, climate baked in so judging
     needs no NASA POWER call. Leads with candidates that are not known sites."""
     if site["body"] == "earth":
-        return []   # breakdown() is Moon-vs-Earth; reverse pairs are not report cards
+        return []   # breakdown() is Moon/Mars-vs-Earth; reverse pairs are not report cards
     ranked = sorted(results, key=lambda r: r["known_analog"] is not None)[:pairs]
     i = src.nearest_tile(site["lat"], site["lon"])
     moon_row = src.meta.iloc[i]
@@ -257,15 +285,19 @@ def export_twins(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
         path = out / "twins" / f"{site['id']}__{hit['tile_id']}.json"
         write_json(path, dict(
             site_id=site["id"],
-            moon={c: clean(moon_row[c], 4) for c in moon_row.index if c not in ("z", "y", "x")},
+            # the source tile, Moon or Mars; it keeps the `moon` key for the
+            # report-card contract, and `body` says which world it is
+            moon={"body": site["body"],
+                  **{c: clean(moon_row[c], 4) for c in moon_row.index if c not in ("z", "y", "x")}},
             earth={**{c: clean(earth_row[c], 4) for c in earth_row.index},
                    "visual_cos_scaled": clean(earth_row.visual_cos_scaled, 4)},
             climate=None if climate is None else {k: clean(v, 3) for k, v in climate.items()},
             breakdown=[dict(dimension=r.dimension, id=slug(r.dimension),
                             moon=clean(r.moon), earth=clean(r.earth),
-                            match=clean(r.match, 4), note=r.note, kind=r.kind)
+                            match=clean(r.match, 4), note=r.note, kind=r.kind,
+                            basis=getattr(r, "basis", None))
                        for r in rows.itertuples()],
-            field_tests=fieldtest.what_to_test(rows),
+            field_tests=fieldtest.what_to_test(rows, body="mars" if site["body"] == "mars" else "moon"),
             model_score=hit.get("model_score"),
         ))
         written.append(path.name)
@@ -276,15 +308,16 @@ def export_traps(sources: list[tuple[str, analog.BodyIndex]], earth: analog.Body
                  sites: list[dict], by_body: dict, out: Path) -> int:
     """traps.json (#30): lookalikes an image-only AI would pick that fail physics.
 
-    {stats: [...per lunar body], traps: [strongest, one per tile], by_site: {...}}
+    {stats: [...per Moon or Mars body], traps: [strongest, one per tile], by_site: {...}}
+    Each trap's model score is the #29 score for its own body's target.
     """
-    model_scores = load_model_scores()
-    if model_scores is None:
+    scores = {body: load_model_scores(MODEL_SCORE_COLUMN[body]) for body, _ in sources}
+    if all(v is None for v in scores.values()):
         print("  - no data/index/earth_scores.parquet (#29), traps carry no model score")
 
     found, stats = [], []
     for body, idx in sources:
-        f, s = traps.scan(idx, earth, body, model_scores=model_scores)
+        f, s = traps.scan(idx, earth, body, model_scores=scores[body])
         found += f
         stats.append(s)
         print(f"  traps: {s['traps']}/{s['lookalikes_checked']} {body} lookalikes fail a physics "
@@ -296,7 +329,8 @@ def export_traps(sources: list[tuple[str, analog.BodyIndex]], earth: analog.Body
         if site.get("is_known_analog") or not site.get("in_index") or src is None or site["body"] == "earth":
             continue
         i = src.nearest_tile(site["lat"], site["lon"])
-        by_site[site["id"]] = traps.traps_for_tile(src, i, earth, site["body"], model_scores=model_scores)
+        by_site[site["id"]] = traps.traps_for_tile(src, i, earth, site["body"],
+                                                   model_scores=scores.get(site["body"]))
 
     return write_json(out / "traps.json", dict(stats=stats, traps=traps.pick(found), by_site=by_site))
 
@@ -304,7 +338,7 @@ def export_traps(sources: list[tuple[str, analog.BodyIndex]], earth: analog.Body
 def export_portfolios(sites: list[dict], earth: analog.BodyIndex, by_body: dict,
                       out: Path) -> list[str]:
     """portfolio/{site_id}.json (#31): the fewest Earth sites that together
-    cover every dimension of one lunar target. Lunar targets only."""
+    cover every dimension of one Moon or Mars target."""
     written = []
     for site in sites:
         src = by_body.get(site["body"])
@@ -315,7 +349,7 @@ def export_portfolios(sites: list[dict], earth: analog.BodyIndex, by_body: dict,
         write_json(out / "portfolio" / f"{site['id']}.json",
                    dict(site_id=site["id"], site_name=site["name"], body=site["body"], **payload))
         written.append(site["id"])
-    print(f"  portfolios: {len(written)} lunar targets")
+    print(f"  portfolios: {len(written)} Moon and Mars targets")
     return written
 
 
@@ -431,16 +465,22 @@ def main() -> int:
         # with in_index=false and no analogs, which is the pre-#26 behaviour.
         polar = (analog.load_index("moon_polar")
                  if (C.INDEX / "moon_polar_meta.parquet").exists() else None)
+        # Mars is optional too (docs/MARS-PLAN.md): without it the Mars sites
+        # export with in_index=false and no analogs.
+        mars = (analog.load_index("mars")
+                if (C.INDEX / "mars_meta.parquet").exists() else None)
     except analog.IndexMismatchError as e:
         sys.exit(f"index is inconsistent: {e} - do not export it")
     earth.meta = annotate_known(earth.meta)
     print(f"moon: {len(moon.meta)} tiles, earth: {len(earth.meta)} tiles, "
-          f"moon_polar: {len(polar.meta) if polar else 0} tiles")
+          f"moon_polar: {len(polar.meta) if polar else 0} tiles, "
+          f"mars: {len(mars.meta) if mars else 0} tiles")
 
     out: Path = args.out
     in_index = lambda lat: abs(lat) <= C.MOON_MAX_ABS_LAT                       # noqa: E731
     polar_in_index = lambda lat: polar is not None and lat <= C.MOON_POLAR_MAX_LAT  # noqa: E731
-    sites = build_sites(in_index, polar_in_index)
+    mars_in_index = lambda lat: mars is not None and abs(lat) <= 60.0           # noqa: E731
+    sites = build_sites(in_index, polar_in_index, mars_in_index)
     write_json(out / "sites.json", sites)
 
     sample_climate = None
@@ -449,14 +489,15 @@ def main() -> int:
             sample_climate = analog.earth_climate(-24.08, -69.92)   # Atacama
         except (requests.RequestException, KeyError, ValueError) as e:
             print(f"! NASA POWER unavailable, exporting without climate rows: {e}")
-    write_json(out / "dimensions.json", build_dimensions(moon, earth, sample_climate, polar))
+    write_json(out / "dimensions.json", build_dimensions(moon, earth, sample_climate, polar, mars))
 
-    bodies = [("moon", moon), ("earth", earth)] + ([("moon_polar", polar)] if polar else [])
+    bodies = ([("moon", moon), ("earth", earth)] + ([("moon_polar", polar)] if polar else [])
+              + ([("mars", mars)] if mars else []))
     for body, idx in bodies:
         export_tiles(idx, body, out)
 
-    by_body = {"moon": moon, "moon_polar": polar, "earth": earth}
-    model_scores = load_model_scores()
+    by_body = {"moon": moon, "moon_polar": polar, "mars": mars, "earth": earth}
+    model_scores = {body: load_model_scores(col) for body, col in MODEL_SCORE_COLUMN.items()}
     cards = 0
     off_index = []
     results_by_site: dict[str, list[dict]] = {}
@@ -469,7 +510,7 @@ def main() -> int:
             off_index.append(site)
             continue
         results = export_analogs(site, src, dst, args.k, out,
-                                 model_scores=model_scores if dst is earth else None)
+                                 model_scores=model_scores.get(site["body"]) if dst is earth else None)
         if results is None:
             off_index.append(site)
             continue
@@ -477,7 +518,8 @@ def main() -> int:
         cards += len(export_twins(site, src, dst, results, args.pairs, out,
                                   with_climate=not args.no_climate))
 
-    export_traps([("moon", moon)] + ([("moon_polar", polar)] if polar else []),
+    export_traps([("moon", moon)] + ([("moon_polar", polar)] if polar else [])
+                 + ([("mars", mars)] if mars else []),
                  earth, sites, by_body, out)
     export_portfolios(sites, earth, by_body, out)
 
@@ -499,11 +541,15 @@ def main() -> int:
     base_done = sum(1 for s in sites
                     if s.get("is_base_region") and s["in_index"])
     print(f"{base_done}/{len(MOON_BASE_REGIONS)} Artemis base regions have analogs")
+    mars_done = sum(1 for s in sites if s["body"] == "mars" and s["in_index"])
+    print(f"{mars_done}/{len(MARS_SITES)} Mars sites have analogs"
+          + ("" if mars else " (no Mars index yet: scripts/02_features.py mars, #38)"))
 
     if off_index:
         # The headline finding, not a footnote: these are the sites the
         # challenge title is about, and today we can say nothing about them.
         base = [s["id"] for s in off_index if s["is_base_region"]]
+        off_index = [s for s in off_index if s["body"] != "mars" or mars is not None]
         print(f"\n! {len(off_index)} sites are outside the index and got no analogs.")
         if base:
             print(f"! {len(base)} of them are Artemis candidate base regions: "

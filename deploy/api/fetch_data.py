@@ -6,14 +6,19 @@ Standard library only: the image has no curl.
 import sys
 import tarfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
 REPO = sys.argv[1] if len(sys.argv) > 1 else "FionaL7/AnalogAtlas"
 BASE = f"https://github.com/{REPO}/releases/download/data"
 DATA = Path("data")
-INDEX = [f"{body}_{f}" for body in ("moon", "moon_polar", "earth")
-         for f in ("meta.parquet", "img.npy", "shade.npy", "order.json")] + ["earth_scores.parquet"]
+FILES = ("meta.parquet", "img.npy", "shade.npy", "order.json")
+INDEX = [f"{body}_{f}" for body in ("moon", "moon_polar", "earth") for f in FILES] + ["earth_scores.parquet"]
+# Mars (docs/MARS-PLAN.md) is fetched when it is on the release and skipped
+# when it is not, so the deploy works before and after the Mars index exists.
+# Its tiles are not fetched: the app draws Mars pictures from NASA Mars Trek.
+OPTIONAL_INDEX = [f"mars_{f}" for f in FILES]
 TILES = ["moon", "earth"]
 
 
@@ -38,10 +43,26 @@ def get(url: str, dest: Path, tries: int = 6) -> None:
     sys.exit(f"could not download {url}")
 
 
+def exists(url: str) -> bool:
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, method="HEAD"), timeout=60):
+            return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        raise
+
+
 (DATA / "index").mkdir(parents=True, exist_ok=True)
 (DATA / "tiles").mkdir(parents=True, exist_ok=True)
 for name in INDEX:
     get(f"{BASE}/index__{name}", DATA / "index" / name)
+# all four Mars files or none: a half index would fail the order check
+if all(exists(f"{BASE}/index__{name}") for name in OPTIONAL_INDEX):
+    for name in OPTIONAL_INDEX:
+        get(f"{BASE}/index__{name}", DATA / "index" / name)
+else:
+    print("no complete Mars index on the release yet: serving without Mars")
 for body in TILES:
     tar = Path(f"/tmp/tiles_{body}.tar")
     get(f"{BASE}/tiles__{body}.tar", tar)

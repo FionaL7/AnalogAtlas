@@ -6,6 +6,10 @@ results near one of these are tagged "known"; everything else is a candidate
 
 MOON_SITES: presets for the "find Earth analogs for this lunar site" view.
 
+MARS_SITES: Mars landing and exploration sites (docs/TARGET-SITES.md, R1-R8),
+with a one-line reason each in MARS_SITE_BLURBS. All lie within 60 S to 60 N,
+inside the `mars` index.
+
 MOON_BASE_REGIONS: NASA's Artemis candidate landing regions, plus Shackleton.
 All are poleward of 80 S, so they belong to the `moon_polar` index, NOT to
 `moon` (60 S to 60 N). Passing them to nearest_tile() on the `moon` index
@@ -170,6 +174,33 @@ MOON_ROLE_SITES = {
 UNTESTABLE_ROLES = {
     "arid": "the whole Moon is arid; no lunar site contrasts against it",
     "aqueous": "a Mars role; nothing on the Moon is an aqueous site",
+}
+
+# Region centres from the IAU/USGS gazetteer; the big regions are hundreds of
+# km across, so the tile at the centre stands for the region.
+MARS_SITES = {
+    "Arcadia Planitia": (49.02, -171.85),
+    "Deuteronilus Mensae": (45.11, 23.92),
+    "Utopia Planitia": (46.74, 117.52),
+    "Jezero crater": (18.41, 77.69),
+    "Gale crater": (-5.37, 137.81),
+    "Oxia Planum": (17.28, -25.71),
+    "Medusae Fossae": (-2.17, -164.20),
+    "Arsia Mons skylights": (-8.26, -120.09),
+}
+
+MARS_SITE_BLURBS = {
+    "Arcadia Planitia": "Human landing zone candidate: ice tens of centimetres below the "
+                        "surface, for in-situ resource use, at low elevation.",
+    "Deuteronilus Mensae": "Human landing zone candidate: debris-covered glaciers.",
+    "Utopia Planitia": "Human landing zone candidate: ground ice and scalloped terrain, "
+                       "near the Zhurong rover's landing site.",
+    "Jezero crater": "Perseverance rover site: a river delta with carbonates.",
+    "Gale crater": "Curiosity rover site: layered sediments, from clays to sulfates.",
+    "Oxia Planum": "Rosalind Franklin rover site: very clay-rich plains.",
+    "Medusae Fossae": "Wind-carved ridges in soft deposits, and a source of dust.",
+    "Arsia Mons skylights": "Cave candidates: possible lava-tube skylights on the volcano's "
+                            "flanks. The point is the volcano's centre.",
 }
 
 EARTH_PRESETS = {
