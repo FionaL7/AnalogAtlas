@@ -19,6 +19,8 @@ Reads data/index/ and writes, under --out:
     traps.json                     lookalike traps (#30)
     candidates.json                the #29 model's top new candidates, per target
     radar.json                     Mini-RF CPR per lunar site (#17), keyed by site id
+    portfolio/{site_id}.json       fewest Earth sites covering every dimension (#31)
+    close_study.json               the #19 close-study pairs, plus close_study/*.jpg
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ import argparse
 import json
 import math
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -34,7 +37,7 @@ import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from analogatlas import analog, config as C, fieldtest, tiles, traps  # noqa: E402
+from analogatlas import analog, config as C, fieldtest, portfolio, tiles, traps  # noqa: E402
 from analogatlas.sites import (  # noqa: E402
     EARTH_PRESETS, KNOWN_EARTH_ANALOGS, MOON_BASE_REGIONS, MOON_SITES,
 )
@@ -298,6 +301,24 @@ def export_traps(sources: list[tuple[str, analog.BodyIndex]], earth: analog.Body
     return write_json(out / "traps.json", dict(stats=stats, traps=traps.pick(found), by_site=by_site))
 
 
+def export_portfolios(sites: list[dict], earth: analog.BodyIndex, by_body: dict,
+                      out: Path) -> list[str]:
+    """portfolio/{site_id}.json (#31): the fewest Earth sites that together
+    cover every dimension of one lunar target. Lunar targets only."""
+    written = []
+    for site in sites:
+        src = by_body.get(site["body"])
+        if site["body"] == "earth" or not site.get("in_index") or src is None:
+            continue
+        i = src.nearest_tile(site["lat"], site["lon"])
+        payload = portfolio.build_portfolio(src, i, earth)
+        write_json(out / "portfolio" / f"{site['id']}.json",
+                   dict(site_id=site["id"], site_name=site["name"], body=site["body"], **payload))
+        written.append(site["id"])
+    print(f"  portfolios: {len(written)} lunar targets")
+    return written
+
+
 def export_candidates(out: Path) -> int | None:
     """candidates.json: {target: [...]} from data/index/candidates_{target}.json (#29)."""
     payload = {}
@@ -323,6 +344,69 @@ def export_radar(sites: list[dict], out: Path) -> int | None:
     payload = {slug(name): {k: clean(v, 4) if isinstance(v, float) else v for k, v in row.items()}
                for name, row in raw.items() if slug(name) in ids}
     return write_json(out / "radar.json", payload)
+
+
+def export_close_study(sites: list[dict], by_body: dict, earth: analog.BodyIndex,
+                       results_by_site: dict[str, list[dict]], out: Path,
+                       with_climate: bool) -> int | None:
+    """close_study.json + one full report card per #19 pair.
+
+    Reads data/index/close_study.json (scripts/04_radar.py close-study). Each
+    pair's twins/{site}__{tile}.json is (re)written with a `close_study` block:
+    radar on both bodies, 30 m slope, a picture, and why the pair was picked.
+    The card is written even when the pair is outside the site's top --pairs.
+    """
+    path = C.INDEX / "close_study.json"
+    if not path.exists():
+        print("  - no data/index/close_study.json yet (#19), skipping close_study.json")
+        return None
+    pairs = json.loads(path.read_text())
+    by_name = {s["name"]: s for s in sites}
+    index = []
+    for pair in pairs:
+        site = by_name[pair["site"]]
+        results = results_by_site.get(site["id"]) or []
+        new = [r for r in results if r["known_analog"] is None]
+        rank = next((k + 1 for k, r in enumerate(new) if r["tile_id"] == pair["earth_tile_id"]), None)
+        hit = next((r for r in results if r["tile_id"] == pair["earth_tile_id"]),
+                   dict(tile_id=pair["earth_tile_id"], known_analog=None, model_score=None))
+        if hit["known_analog"] is not None:
+            print(f"  ! {pair['earth_tile_id']} is now near a known analog; check the #19 pick")
+        name, = export_twins(site, by_body[site["body"]], earth, [hit], 1, out, with_climate)
+
+        pic = pair.get("picture")
+        if pic:
+            src_pic = C.INDEX / "close_study" / pic["file"]
+            if src_pic.exists():
+                (out / "close_study").mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src_pic, out / "close_study" / pic["file"])
+                pic = dict(pic, url=f"/data/close_study/{pic['file']}")
+            else:
+                pic = None
+        block = dict(
+            id=pair["id"], headline=pair["headline"], earth_name=pair["earth_name"],
+            why_picked=pair["why_picked"], rank_among_new=rank,
+            nearest_known=nearest_known(pair["earth_lat"], pair["earth_lon"]),
+            box=pair["box"], radar=pair["radar"], earth_slope_30m=pair["earth_slope_30m"],
+            picture=pic,
+        )
+        card_path = out / "twins" / name
+        card = json.loads(card_path.read_text())
+        card["close_study"] = block
+        write_json(card_path, card)
+        index.append(dict(block, site_id=site["id"], site_name=site["name"], site_body=site["body"],
+                          earth_tile_id=pair["earth_tile_id"], earth_lat=clean(pair["earth_lat"], 3),
+                          earth_lon=clean(pair["earth_lon"], 3), twin=f"/data/twins/{name}",
+                          model_score=hit.get("model_score")))
+    print(f"  close study: {len(index)} pairs")
+    return write_json(out / "close_study.json", index)
+
+
+def nearest_known(lat: float, lon: float) -> dict:
+    """The closest well-studied analog site and its distance: the evidence for "new"."""
+    name, (la, lo) = min(KNOWN_EARTH_ANALOGS.items(),
+                         key=lambda kv: analog.haversine_deg(lat, lon, *kv[1]))
+    return dict(name=name, km=round(float(analog.haversine_deg(lat, lon, la, lo)) * C.EARTH_KM_PER_DEG))
 
 
 def main() -> int:
@@ -375,6 +459,7 @@ def main() -> int:
     model_scores = load_model_scores()
     cards = 0
     off_index = []
+    results_by_site: dict[str, list[dict]] = {}
     for site in sites:
         if site.get("is_known_analog"):
             continue        # reference points on the map, not search targets
@@ -388,14 +473,17 @@ def main() -> int:
         if results is None:
             off_index.append(site)
             continue
+        results_by_site[site["id"]] = results
         cards += len(export_twins(site, src, dst, results, args.pairs, out,
                                   with_climate=not args.no_climate))
 
     export_traps([("moon", moon)] + ([("moon_polar", polar)] if polar else []),
                  earth, sites, by_body, out)
+    export_portfolios(sites, earth, by_body, out)
 
     export_candidates(out)
     export_radar(sites, out)
+    export_close_study(sites, by_body, earth, results_by_site, out, with_climate=not args.no_climate)
 
     src_validation = C.INDEX / "validation.json"
     if src_validation.exists():

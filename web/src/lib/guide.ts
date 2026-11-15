@@ -1,7 +1,7 @@
 /** Data for the field-guide pages, assembled from the static export. */
 import * as api from "./api";
 import type {
-  AnalogHit, AnalogsResponse, RadarSite, Site, TileCell, Trap, TwinsResponse,
+  AnalogHit, AnalogsResponse, CloseStudyEntry, RadarSite, Site, TileCell, Trap, TwinsResponse,
 } from "./types";
 
 /** Nearest grid cell by great-circle angle. Grids are small (≤ ~5k cells). */
@@ -32,6 +32,8 @@ export interface Guide {
   radar: RadarSite | null;
   candidates: GuideCandidate[];
   traps: Trap[];
+  /** Close-study pairs (#19) for this site, if any. */
+  closeStudy: CloseStudyEntry[];
 }
 
 async function staticJson<T>(path: string): Promise<T | null> {
@@ -47,10 +49,11 @@ async function staticJson<T>(path: string): Promise<T | null> {
 /** Everything one field guide shows. `n` new candidates, each with its
  * exported report card where 03_export.py wrote one. */
 export async function loadGuide(site: Site, n = 3): Promise<Guide> {
-  const [cells, radar, traps, analogs] = await Promise.all([
+  const [cells, radar, traps, study, analogs] = await Promise.all([
     api.tiles(site.body),
     api.radar(),
     api.traps(),
+    api.closeStudy(),
     staticJson<AnalogsResponse>(`/data/analogs/${site.id}.json`),
   ]);
   const fresh = (analogs?.results ?? []).filter((h) => h.known_analog === null).slice(0, n);
@@ -63,5 +66,6 @@ export async function loadGuide(site: Site, n = 3): Promise<Guide> {
     radar: radar?.[site.id] ?? null,
     candidates: fresh.map((hit, i) => ({ hit, card: cards[i] })),
     traps: traps?.by_site[site.id] ?? [],
+    closeStudy: (study ?? []).filter((s) => s.site_id === site.id),
   };
 }

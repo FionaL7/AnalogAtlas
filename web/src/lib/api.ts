@@ -11,6 +11,8 @@ import type {
   AnalogsResponse,
   Body,
   CandidatesFile,
+  PortfolioFile,
+  CloseStudyEntry,
   RadarFile,
   SearchRequest,
   SearchResponse,
@@ -124,6 +126,12 @@ export const traps = () => once<TrapsFile>("/data/traps.json");
 export const candidates = () => once<CandidatesFile>("/data/candidates.json");
 /** Mini-RF radar roughness per lunar site (#17). */
 export const radar = () => once<RadarFile>("/data/radar.json");
+/** The analog portfolio for one lunar site (#31). Null if not exported. */
+export const portfolio = (siteId: string) => once<PortfolioFile>(`/data/portfolio/${siteId}.json`);
+/** The close-study pairs (#19). */
+export const closeStudy = () => once<CloseStudyEntry[]>("/data/close_study.json");
+/** One close-study pair's full report card, from the path close_study.json gives. */
+export const closeStudyCard = (path: string) => fromStatic<TwinsResponse>(path);
 /** Hold-one-out validation of the analog model (#29). */
 export const validation = () => once<ValidationFile>("/data/validation.json");
 

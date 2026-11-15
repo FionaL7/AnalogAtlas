@@ -232,3 +232,53 @@ def test_candidates_and_radar_are_exported_when_present(index_dir, tmp_path, mon
     radar = read(out / "radar.json")
     assert set(radar) == {"haworth"}          # keyed by site id; unknown names dropped
     assert radar["haworth"]["cpr_median"] == 0.4989
+
+
+def test_portfolios_are_exported_for_lunar_targets(exported):
+    """#31: one portfolio per in-index lunar target, none for Earth sites."""
+    files = {p.stem: read(p) for p in (exported / "portfolio").glob("*.json")}
+    sites = read(exported / "sites.json")
+    lunar = {s["id"] for s in sites if s["body"] != "earth" and s["in_index"]}
+    assert set(files) == lunar and len(files) >= 3
+    for p in files.values():
+        assert {d["id"] for d in p["dimensions"]} >= {"shape", "slope", "access"}
+        assert p["sites"] and all(s["covers"] for s in p["sites"])
+
+
+def test_close_study_pairs_get_full_report_cards(index_dir, tmp_path, monkeypatch):
+    """#19: each close-study pair gets a twins card with a close_study block,
+    even when it is outside the site's top --pairs, plus close_study.json."""
+    import pandas as pd
+    earth = pd.read_parquet(index_dir.path / "earth_meta.parquet")
+    tile = earth.iloc[-1]
+    (index_dir.path / "close_study").mkdir()
+    (index_dir.path / "close_study" / "p1_s2.jpg").write_bytes(b"\xff\xd8jpeg")
+    radar = {"moon": {"cpr_median": 0.42, "measure": "cpr"},
+             "earth_cpr": None,
+             "earth_s1": {"cpr_median": 0.12, "measure": "s1_vh_vv"}}
+    (index_dir.path / "close_study.json").write_text(json.dumps([dict(
+        id="p1", site="Apollo 11 - Mare Tranquillitatis", earth_tile_id=tile.tile_id,
+        earth_name="Somewhere", headline="h", why_picked="w",
+        site_lat=0.67, site_lon=23.47, earth_lat=float(tile.lat), earth_lon=float(tile.lon),
+        box={"half_km": 15}, radar=radar, earth_slope_30m={"slope_med": 1.2},
+        picture={"file": "p1_s2.jpg", "date": "2026-01-01"},
+    )]))
+    out = tmp_path / "o"
+    module = load_script()
+    monkeypatch.setattr("sys.argv", ["03_export.py", "--out", str(out), "--no-climate",
+                                     "--k", "12", "--pairs", "1"])
+    assert module.main() == 0
+
+    index = read(out / "close_study.json")
+    assert len(index) == 1
+    entry = index[0]
+    assert entry["site_id"] == "apollo-11-mare-tranquillitatis"
+    assert entry["nearest_known"]["km"] >= 0
+    card = read(out / entry["twin"].removeprefix("/data/"))
+    assert card["breakdown"] and card["close_study"]["radar"]["earth_s1"]["measure"] == "s1_vh_vv"
+    assert card["close_study"]["picture"]["url"] == "/data/close_study/p1_s2.jpg"
+    assert (out / "close_study" / "p1_s2.jpg").exists()
+
+
+def test_close_study_is_skipped_without_its_input(exported):
+    assert not (exported / "close_study.json").exists()

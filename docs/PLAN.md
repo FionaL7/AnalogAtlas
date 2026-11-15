@@ -28,7 +28,7 @@ Scope: the Moon first. How much Mars gets is an [open decision](#open-decisions)
 
 ## Status
 
-Search works end to end on real data: Moon, south pole and Earth indexes, the API, the static export and the app. Still open: the Earth half of the radar close study (#19) and Mars (#7).
+Search works end to end on real data: Moon, south pole and Earth indexes, the API, the static export and the app. Still open: Mars (#7).
 
 | Piece | State | Notes |
 | --- | --- | --- |
@@ -40,9 +40,10 @@ Search works end to end on real data: Moon, south pole and Earth indexes, the AP
 | Earth side | Done | 11,699 land tiles. Hillshade + slope/relief from Copernicus DEM via `analogatlas/earth_ee.py` (Earth Engine, `EE_PROJECT` in `.env`); imagery from GIBS Blue Marble |
 | Analog model | Done | PU learning on known sites, hold-one-out validation, new candidates ([#29](https://github.com/FionaL7/AnalogAtlas/issues/29)) |
 | Lookalike traps | Done | `analogatlas/traps.py`, exported as `traps.json` ([#30](https://github.com/FionaL7/AnalogAtlas/issues/30)) |
+| Analog portfolio | Done | `analogatlas/portfolio.py`, exported as `portfolio/{site_id}.json` for all 21 lunar targets; each fully covered by 2–4 Earth sites ([#31](https://github.com/FionaL7/AnalogAtlas/issues/31)). Shown on each field guide; slide figure `docs/figures/portfolio.png` (`scripts/05_portfolio_figure.py`). **If #32 changes scoring, re-run `03_export.py` and `05_portfolio_figure.py`** |
 | Search API | Done | `api/`: `/search`, `/analogs`, `/twins` (with field tests and model score), `/tile` |
 | React frontend | Done | Atlas (site, map-click and text/picture search, report card with tile pictures and field tests), field guides, discoveries, traps, methodology with validation, data and credits ([#34](https://github.com/FionaL7/AnalogAtlas/issues/34)) |
-| Radar close study | Moon done | Mini-RF CPR for every lunar site (`radar.json`). Earth RCM/Sentinel-1 side pending ([#19](https://github.com/FionaL7/AnalogAtlas/issues/19)) |
+| Radar close study | Done | Mini-RF CPR for every lunar site (`radar.json`). 3 new pairs measured up close: radar on both bodies, 30 m slope, Sentinel-2 picture, full report card, page at `/close-study/:id`. Pairs and why: `analogatlas/closestudy.py` ([#19](https://github.com/FionaL7/AnalogAtlas/issues/19)) |
 | Validation | Done | Crater retrieval against the held-out Robbins catalog, and each known analog's rank for its role, both in `validation.json` and on the methodology page. `scripts/05_validate.py` ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)) |
 | Mars | Not started | |
 
@@ -104,9 +105,11 @@ Stack, pages, user flows, the API/data contract and repo layout are in [ARCHITEC
 
 Code: [FionaL7/AnalogAtlas](https://github.com/FionaL7/AnalogAtlas), branch `main`. Repo layout and what each piece does: [ARCHITECTURE.md](ARCHITECTURE.md#5-repo-layout).
 
-Git ignores `data/` and `.venv/`, so each developer rebuilds them on their own machine.
+Git ignores `data/` and `.venv/`. The shared copy of `data/` is on the GitHub Release [`data`](https://github.com/FionaL7/AnalogAtlas/releases/tag/data) ([#8](https://github.com/FionaL7/AnalogAtlas/issues/8)). Skill: [data-sync](../.claude/skills/data-sync/SKILL.md).
 
 ### Setup on a new machine
+
+**Quick path:** set up the venv (below), then `python scripts/data.py pull` downloads `data/index/`, which is all the API needs. Add `raw tiles` to get the rasters and tiles too. Only rebuild with the steps below when you change the pipeline, then `python scripts/data.py push <folder>`.
 
 Put the raw rasters in `data/raw/` first — download URLs, sizes and the `.lbl` gotcha are in the [README](../README.md#raw-data). PyTorch picks the device: Apple GPU (MPS) on a Mac, CUDA on an NVIDIA GPU, otherwise CPU (slower, but fine for 5k tiles).
 
@@ -181,6 +184,7 @@ The next milestone is the Earth index. Every Earth–Moon feature in the app dep
   - Set up later today, under [#21](https://github.com/FionaL7/AnalogAtlas/issues/21).
   - Still to settle then: frontend host (Firebase Hosting or Vercel) and the CD pipeline.
 
+- **Sharing `data/`: GitHub Release files** ([#8](https://github.com/FionaL7/AnalogAtlas/issues/8)), release tag `data`. Free, `gh` already works on every device, 2 GB per file. `python scripts/data.py pull|push`. The last push of a file wins.
 - **Map library: Leaflet** (react-leaflet), one map per body in EPSG:4326 ([#24](https://github.com/FionaL7/AnalogAtlas/issues/24)). Trek and GIBS tiles are plain lat/lon, which Leaflet renders natively; MapLibre only does Web Mercator or globe. The polar pane uses a custom Leaflet CRS in `web/src/lib/polar.ts` — **no proj4leaflet**: the spherical stereographic forward/inverse is six lines and Leaflet takes a custom CRS directly.
 - **South pole: core scope** ([#6](https://github.com/FionaL7/AnalogAtlas/issues/6), built in [#26](https://github.com/FionaL7/AnalogAtlas/issues/26)). It is a separate body, `moon_polar`, on a south polar stereographic grid — not a wider `moon`. Past ~60° an equirectangular tile stops being square on the ground (at 85°S it is 6 km wide and 85 km tall) and the imagery comes back as horizontal smear, so raising `MOON_MAX_ABS_LAT` produces confident nonsense rather than coverage. This is the same split every lunar data set makes, and why the Diviner cylindrical products stop at ±60.
 

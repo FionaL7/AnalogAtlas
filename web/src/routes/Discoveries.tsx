@@ -7,8 +7,9 @@ import { Link } from "react-router-dom";
 import { TileChip } from "../components/TileChip";
 import { MapPane } from "../components/map/MapPane";
 import * as api from "../lib/api";
+import { CloseStudyList } from "./CloseStudy";
 import { coords } from "../lib/format";
-import type { Candidate, CandidatesFile } from "../lib/types";
+import type { Candidate, CandidatesFile, CloseStudyEntry } from "../lib/types";
 
 type Target = "moon" | "mars" | "all";
 const TARGET_LABEL: Record<Target, string> = { moon: "Moon", mars: "Mars", all: "Moon or Mars" };
@@ -56,8 +57,10 @@ export function Discoveries() {
   const [data, setData] = useState<CandidatesFile | null | undefined>(undefined);
   const [target, setTarget] = useState<Target>("moon");
   const [selected, setSelected] = useState<string | null>(null);
+  const [study, setStudy] = useState<CloseStudyEntry[] | null>(null);
   useEffect(() => {
     api.candidates().then(setData);
+    api.closeStudy().then(setStudy);
   }, []);
 
   if (data === undefined) return <p className="text-sm text-muted">Loading…</p>;
@@ -84,6 +87,17 @@ export function Discoveries() {
           <Link to="/methodology" className="text-holds underline">methodology page</Link>.
         </p>
       </header>
+
+      {study && study.length > 0 && (
+        <section aria-labelledby="close-study">
+          <h2 id="close-study" className="text-sm uppercase tracking-wide text-muted">Close study</h2>
+          <p className="mt-1 mb-3 max-w-2xl text-sm text-muted">
+            {study.length} of the strongest new analogs, measured up close: radar roughness on both
+            bodies, 30 m slopes, a satellite picture, and the full report card.
+          </p>
+          <CloseStudyList entries={study} />
+        </section>
+      )}
 
       <div role="tablist" aria-label="Analog for" className="flex gap-1">
         {targets.map((t) => (

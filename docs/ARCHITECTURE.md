@@ -92,8 +92,9 @@ This directly answers a requirement: [REQUIREMENTS.md](REQUIREMENTS.md#4-things-
 | --- | --- |
 | `/` | **Atlas, the main explorer.** Three ways in: a preset site, a click anywhere on either map, or a text/picture search (results list, pick one to make it the source). Physical-weight slider (`w_phys`, needs the API), "new candidates only" toggle, lunar map switch (60°S–60°N or south pole). Two map panes: Earth left, Moon right. Report card on a candidate: both tiles side by side (imagery or terrain), per-dimension bars, **Holds / Breaks / Earth can't reproduce**, analog-model percentile, **what to test here**. Lookalike traps for the site below |
 | `/sites` | Field-guide index: every lunar site, base regions first, with illumination, permanent shadow, radar CPR and trap count |
-| `/sites/:id` | Field guide per site: the ground at 85 km (slope, relief, polar dimensions), Mini-RF radar CPR (Earth RCM side pending #19), top 3 new Earth analogs with their field tests, lookalikes to avoid. Built from the static export alone |
-| `/discoveries` | The #29 model's top new candidates (not near any known site), with reasons, on a map; each links to the Atlas to find its lunar match |
+| `/sites/:id` | Field guide per site: the ground at 85 km (slope, relief, polar dimensions), Mini-RF radar CPR, plus the Earth radar number where the site has a close-study pair (#19), top 3 new Earth analogs with their field tests, lookalikes to avoid. Built from the static export alone |
+| `/discoveries` | The close-study pairs first (#19), then the #29 model's top new candidates (not near any known site), with reasons, on a map; each links to the Atlas to find its lunar match |
+| `/close-study/:id` | One close-study pair (#19): why it was picked and why it is new, radar roughness on both bodies (CPR vs CPR where RCM exists, otherwise the Sentinel-1 indicator, labelled), slopes at 1.9 km and 30 m, a Sentinel-2 picture, the full report card |
 | `/traps` | Lookalike traps (#30): trap rate per lunar body, counts by reason, the strongest examples with image-only vs physics vs model ranks |
 | `/methodology` | Scoring, the LOLA slope validation, **crater retrieval** and **where known analogs rank for their role** (#16), **hold-one-out validation** of the analog model, **what we rank on versus what we only report** (#32) — all from `validation.json` — and limitations |
 | `/data` | Data sources, credits, and the AI-tool declaration ([R8](REQUIREMENTS.md#from-the-space-apps-rules) requires this) |
@@ -222,6 +223,8 @@ Gitignored. Built at deploy time from `data/index/` (the `data` release), then b
 | `traps.json` | **Lookalike traps** (#30): Earth tiles an image-only AI would pick (top hillshade similarity) that fail a physics check. `stats`: per lunar body, `trap_rate` = share of the top-20 lookalikes that are traps, plus counts per reason. `traps`: the strongest, one per Earth tile. `by_site`: traps per preset site. Each trap has `visual_rank` (image-only), `physics_rank` (where our search, cross_body, puts it; it pushes ice, plants and water down, see #33), `model_score_pct` (#29 model, environment-aware), and `breakers` with a plain-language `reason` (ice, vegetation, water, wet climate, slope, relief). Built by `analogatlas/traps.py` |
 | `candidates.json` | `{moon, mars, all}`: the #29 model's top new candidates, copied from `data/index/candidates_*.json` (`tile_id, lat, lon, score_pct, why, slope_med, barren_frac, precip_mm, access_min`) |
 | `radar.json` | Mini-RF CPR per lunar site (#17), keyed by site id: `cpr_median, cpr_p90, coverage, n_pixels, box_half_km, source`. From `data/index/moon_site_cpr.json` |
+| `portfolio/{site_id}.json` | **Analog portfolio** (#31), one per lunar target: the fewest Earth sites that together cover 7 dimensions (terrain shape, slope and relief, thermal swing, dryness, low sun angle, bare rock (frozen at the pole), access). `dimensions`: `threshold`, `earth_best`, `covered_by`, and `earth_best_only` when no Earth site reaches the bar, so the best Earth can do counts. `sites`: picks in order, each with `covers`, `adds` and all 7 `scores`. `best_single_site`: how many dimensions one site covers alone. Ice, plant and water tiles are never picked. Built by `analogatlas/portfolio.py` (greedy set cover) |
+| `close_study.json` | The #19 pairs: `id, site_id, earth_tile_id, earth_name, headline, why_picked, rank_among_new, nearest_known, radar{moon, earth_cpr, earth_s1}, earth_slope_30m, picture, twin`. Each radar stat has `measure`: `cpr` or `s1_vh_vv` (never compare the two). The same block is added as `close_study` to that pair's `twins/*.json`. Pictures in `close_study/*.jpg`. From `data/index/close_study.json` (`scripts/04_radar.py close-study`) |
 
 `known_analog` comes from `analog.known_analog_name(lat, lon)` (150 km radius). Tiles where it's `null` are the **new** candidates — what the challenge actually asks for, so the UI leads with them.
 
@@ -299,6 +302,8 @@ analogatlas/     search core + pipeline library (existing)
   embed.py         CLIP image/text embeddings; rotation-averaged hillshades; prompt ensembling
   analog.py        search, cross-body matching, NASA POWER lookup, report card  ← what the API wraps
   sites.py         known Earth analogs (known/new tagging) + Moon/Earth presets; role → lunar query sites
+  portfolio.py     fewest Earth sites covering every dimension of a lunar target (#31)
+  closestudy.py    the close-study pairs and why each one is new (#19)
   craters.py       Robbins crater labels per tile — validation ground truth only, never a feature
 scripts/
   01_tiles.py      step 1: grids + tile download
@@ -307,6 +312,7 @@ scripts/
   04_train.py      step 4: analog model, hold-one-out, new candidates (#29)
   04_radar.py      radar roughness: Mini-RF download, per-site CPR, RCM search (#17, #18)
   05_validate.py   step 5: crater retrieval + known-analog ranking → validation.json (#16)
+  05_portfolio_figure.py  slide figure docs/figures/portfolio.png (#31)
 api/               FastAPI — to write
   main.py            app factory; loads both BodyIndex at startup
   routers/           search.py, analogs.py, twins.py, tile.py

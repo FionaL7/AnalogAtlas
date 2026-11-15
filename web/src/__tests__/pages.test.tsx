@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import type { MapPaneProps } from "../components/map/MapPane";
 import * as api from "../lib/api";
+import { cprVerdict } from "../routes/CloseStudy";
 import type { TrapsFile } from "../lib/types";
 
 vi.mock("../components/map/LeafletMap", () => ({
@@ -125,6 +126,23 @@ const FILES: Record<string, unknown> = {
                                     psr_frac: 0.12, avg_illum: 0.3, illum_max: 0.88, earth_vis: 0.6 }],
 };
 
+const STUDY = {
+  id: "haworth-puna", site_id: "haworth", site_name: "Haworth", site_body: "moon_polar",
+  earth_tile_id: "earth_-77.50_+162.00", earth_lat: -77.5, earth_lon: 162,
+  twin: "/data/twins/haworth__earth_-77.50_+162.00.json", model_score: 0.99,
+  headline: "A bare plateau", earth_name: "Somewhere high", why_picked: "#1 for Haworth.",
+  rank_among_new: 1, nearest_known: { name: "Atacama", km: 291 }, box: { half_km: 15 },
+  radar: {
+    moon: { cpr_median: 0.44, cpr_p90: 0.8, coverage: 0.79, n_pixels: 100, source: "LRO Mini-RF",
+            measure: "cpr", box_half_km: 15 },
+    earth_cpr: null,
+    earth_s1: { cpr_median: 0.152, cpr_p90: 0.3, coverage: 0.63, n_pixels: 100, source: "Sentinel-1",
+                measure: "s1_vh_vv", box_half_km: 15, dates: "2025-03-01/2025-05-31" },
+  },
+  earth_slope_30m: { slope_med: 10.77, slope_p90: 26.25, n_pixels: 1000, source: "Copernicus GLO-30" },
+  picture: { url: "/data/close_study/x.jpg", date: "2025-04-27", source: "Sentinel-2", cloud_pct: 0.1 },
+};
+
 function serve(files: Record<string, unknown>) {
   vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
     const body = files[String(url)];
@@ -139,6 +157,51 @@ const at = (path: string) =>
 
 beforeEach(() => api._resetStaticCache());
 afterEach(() => vi.restoreAllMocks());
+
+describe("close study (#19)", () => {
+  const files = { ...FILES, "/data/close_study.json": [STUDY] };
+
+  it("Close-study page: radar on both bodies, labelled measures, slopes, full card", async () => {
+    serve(files);
+    at("/close-study/haworth-puna");
+    expect(await screen.findByRole("heading", { name: "Haworth ↔ Somewhere high" })).toBeInTheDocument();
+    expect(screen.getByText(/CPR 0.44/)).toBeInTheDocument();
+    expect(screen.getByText(/VH\/VV 0.15/)).toBeInTheDocument();
+    expect(screen.getByText(/free RCM compact-pol data covers Canada only/)).toBeInTheDocument();
+    expect(screen.getByText("10.8°")).toBeInTheDocument();
+    expect(screen.getByText(/291 km/)).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Report card" })).toBeInTheDocument();
+  });
+
+  it("Close-study page: unknown id says so", async () => {
+    serve(files);
+    at("/close-study/nope");
+    expect(await screen.findByText(/No close study called/)).toBeInTheDocument();
+  });
+
+  it("Discoveries and the field guide link to the close study", async () => {
+    serve(files);
+    at("/discoveries");
+    expect(await screen.findByRole("link", { name: /Somewhere high/ }))
+      .toHaveAttribute("href", "/close-study/haworth-puna");
+  });
+
+  it("Field guide shows the Earth radar number from the close study", async () => {
+    serve(files);
+    at("/sites/haworth");
+    expect(await screen.findByText(/Somewhere high \(close study\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Sentinel-1 indicator, not CPR/)).toBeInTheDocument();
+  });
+});
+
+describe("cprVerdict", () => {
+  it("compares CPR with CPR only, in plain words", () => {
+    expect(cprVerdict(0.46, 0.536)).toMatch(/About as rough/);
+    expect(cprVerdict(0.4, 0.8)).toMatch(/Rougher/);
+    expect(cprVerdict(0.6, 0.2)).toMatch(/Smoother/);
+    expect(cprVerdict(0.5, null)).toBeNull();
+  });
+});
 
 describe("pages from the static export", () => {
   it("Traps: headline rate, reasons, and each trap's reason", async () => {
@@ -220,8 +283,39 @@ describe("pages from the static export", () => {
     expect(await screen.findByText(/CPR 0.50/)).toBeInTheDocument();
     expect(screen.getByText("88%")).toBeInTheDocument();       // best-lit point
     expect(await screen.findByText("Surviving long darkness")).toBeInTheDocument();
-    expect(screen.getByText(/Pending the close study/)).toBeInTheDocument();
+    expect(screen.getByText(/Not in the close study/)).toBeInTheDocument();
     expect(screen.getByText(/Lookalikes to avoid/)).toBeInTheDocument();
+  });
+
+  it("Field guide: portfolio of Earth sites, with Earth's limits said plainly", async () => {
+    const dim = (id: string, label: string, covered_by: string | null, earth_best_only = false) =>
+      ({ id, label, note: "", moon: "-", threshold: 0.6, earth_best: 0.64, earth_best_only, covered_by });
+    serve({ ...FILES, "/data/portfolio/haworth.json": {
+      site_id: "haworth", site_name: "Haworth", body: "moon_polar",
+      src_tile: { tile_id: "moonsp_2_3", lat: -86, lon: -1.7 }, polar: true,
+      dimensions: [dim("dryness", "Dryness", "earth_a"), dim("sun_angle", "Low sun angle", "earth_b", true),
+                   dim("access", "Access", "earth_a")],
+      sites: [
+        { order: 1, tile_id: "earth_a", lat: -26.5, lon: -68.82, known_analog: null,
+          covers: ["dryness", "access"], adds: ["dryness", "access"], scores: {} },
+        { order: 2, tile_id: "earth_b", lat: 81.5, lon: -88.67, known_analog: "Haughton Crater",
+          covers: ["sun_angle"], adds: ["sun_angle"], scores: {} },
+      ],
+      uncovered: [], best_single_site: { tile_id: "earth_a", covers: 2 }, candidates: 100,
+    } });
+    at("/sites/haworth");
+    expect(await screen.findByText("Smallest set of Earth sites")).toBeInTheDocument();
+    expect(screen.getByText(/the best single site covers only 2/)).toBeInTheDocument();
+    expect(screen.getByText("Near Haughton Crater")).toBeInTheDocument();
+    expect(screen.getByText(/closest Earth gets \(64%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Practical, not likeness/)).toBeInTheDocument();
+  });
+
+  it("Field guide: no portfolio section when it is not exported", async () => {
+    serve(FILES);
+    at("/sites/haworth");
+    expect(await screen.findByRole("heading", { name: "Haworth" })).toBeInTheDocument();
+    expect(screen.queryByText("Smallest set of Earth sites")).not.toBeInTheDocument();
   });
 
   it("Field guides index links to each site", async () => {

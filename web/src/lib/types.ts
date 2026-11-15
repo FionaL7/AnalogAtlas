@@ -96,6 +96,8 @@ export interface TwinsResponse {
   /** What to test at the Earth site. Absent from older exports. */
   field_tests?: FieldTests | null;
   model_score?: number | null;
+  /** Only on the close-study pairs (#19). */
+  close_study?: CloseStudy;
 }
 
 /** Static export: tiles/{body}.json (§4.2). One cell of the map grid. */
@@ -307,4 +309,91 @@ export interface ValidationFile {
   crater_retrieval?: CraterRetrieval;
   known_analog_ranking?: KnownAnalogRanking;
   polar_analog_ranking?: PolarAnalogRanking;
+}
+
+/** Static export: portfolio/{site_id}.json (#31). The fewest Earth sites
+ * that together cover every dimension of one lunar target. */
+export interface PortfolioDimension {
+  id: string;
+  label: string;
+  note: string;
+  /** What this dimension is on the Moon side, in words ("-" if none). */
+  moon: string;
+  /** Score (0-1) a site needs to cover it. */
+  threshold: number;
+  /** Best score any eligible Earth tile reaches. */
+  earth_best: number | null;
+  /** No Earth site reaches the usual bar; the best Earth can do counts. */
+  earth_best_only: boolean;
+  /** tile_id of the site that first covered it; null if uncovered. */
+  covered_by: string | null;
+}
+
+export interface PortfolioSite {
+  order: number;
+  tile_id: string;
+  lat: number;
+  lon: number;
+  known_analog: string | null;
+  /** Every dimension this site covers. */
+  covers: string[];
+  /** The ones it was the first to cover. */
+  adds: string[];
+  scores: Record<string, number>;
+}
+
+export interface PortfolioFile {
+  site_id: string;
+  site_name: string;
+  body: Body;
+  src_tile: { tile_id: string; lat: number; lon: number };
+  polar: boolean;
+  dimensions: PortfolioDimension[];
+  sites: PortfolioSite[];
+  uncovered: string[];
+  best_single_site: { tile_id: string; covers: number } | null;
+  candidates: number;
+}
+
+/** One radar measurement for a 30 km box. The median/p90 keep their cpr_
+ * names for every measure: read `measure` before comparing two of them. */
+export interface RadarStat {
+  cpr_median: number | null;
+  cpr_p90: number | null;
+  coverage: number;
+  n_pixels: number;
+  source: string;
+  /** "cpr" (Mini-RF, RCM) or "s1_vh_vv" (Sentinel-1 cross-pol ratio, not CPR). */
+  measure: "cpr" | "s1_vh_vv";
+  box_half_km: number;
+  dates?: string;
+  scenes?: string[];
+}
+
+/** The close-study block (#19), in twins/*.json and close_study.json. */
+export interface CloseStudy {
+  id: string;
+  headline: string;
+  earth_name: string;
+  why_picked: string;
+  /** Position among the site's new (not known) Earth analogs, 1 = best. */
+  rank_among_new: number | null;
+  nearest_known: { name: string; km: number };
+  box: { half_km: number; lat_min?: number; lat_max?: number; lon_min?: number; lon_max?: number };
+  radar: { moon: RadarStat; earth_cpr: RadarStat | null; earth_s1: RadarStat };
+  earth_slope_30m: { slope_med: number | null; slope_p90: number | null; n_pixels: number; source: string };
+  picture: { url: string; date: string; source: string; cloud_pct: number } | null;
+}
+
+/** Static export: close_study.json, one entry per pair. */
+export interface CloseStudyEntry extends CloseStudy {
+  site_id: string;
+  site_name: string;
+  site_body: Body;
+  earth_tile_id: string;
+  earth_lat: number;
+  earth_lon: number;
+  /** Path of the full report card, e.g. /data/twins/{site}__{tile}.json */
+  twin: string;
+  model_score: number | null;
 }

@@ -26,6 +26,14 @@ It senses roughness at roughly the radar wavelength (cm to m): what a lander foo
 4. Download it: `python scripts/04_radar.py download-rcm <item-id> <short-name>`
 5. Summarise: `radar.rcm_box(C.RAW / "rcm" / "<short-name>", *radar.box_around(lat, lon, half_km, C.EARTH_KM_PER_DEG))`
 
+## Close-study pairs (#19)
+The pairs live in `analogatlas/closestudy.py` (`PAIRS`). To re-measure them, or after changing a pair:
+1. Download the RCM scenes a pair names in `rcm_scenes` (`find-rcm`, then `download-rcm <id> <folder>`).
+2. `python scripts/04_radar.py close-study` → `data/index/close_study.json` + `data/index/close_study/*.jpg`. Needs rasterio and pandas: in Docker on rishabh-win (below, add `pandas pyarrow` to the pip line).
+3. `python scripts/03_export.py` → `close_study.json`, the pairs' `twins/*.json`, pictures.
+
+Sentinel-1, Sentinel-2 and the 30 m DEM come from Microsoft Planetary Computer, anonymous.
+
 ## On Windows with Application Control (rishabh-win)
 rasterio and pyarrow DLLs are blocked natively. Run in Docker:
 ```

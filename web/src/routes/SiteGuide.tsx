@@ -6,12 +6,13 @@ import { Link, useParams } from "react-router-dom";
 
 import { TileChip } from "../components/TileChip";
 import { TrapCard } from "../components/TrapCard";
+import { Portfolio } from "../components/panels/Portfolio";
 import { FieldTestList } from "../components/panels/ReportCard";
 import * as api from "../lib/api";
 import type { TileLike } from "../lib/chips";
 import { coords, groupBreakdown, percent } from "../lib/format";
 import { loadGuide, type Guide } from "../lib/guide";
-import type { Site } from "../lib/types";
+import type { PortfolioFile, Site } from "../lib/types";
 
 function Fact({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
@@ -51,15 +52,34 @@ function Radar({ guide }: { guide: Guide }) {
             <dd className="mt-0.5 text-sm text-muted">Not measured for this site yet.</dd>
           )}
         </div>
-        <div className="rounded border border-dashed border-edge p-3">
-          <dt className="text-xs text-muted">Earth · RADARSAT Constellation (CSA)</dt>
-          <dd className="mt-0.5 text-sm">Pending the close study.</dd>
-          <dd className="mt-1 text-[11px] text-muted">
-            Comparable CPR on Earth needs a compact-polarimetry RCM scene, freely available for Canada
-            south of ~70°N. Elsewhere only a Sentinel-1 roughness indicator exists, which is not the same
-            measurement and will be labelled as such.
-          </dd>
-        </div>
+        {guide.closeStudy.length > 0 ? guide.closeStudy.map((s) => {
+          const cpr = s.radar.earth_cpr?.cpr_median;
+          const s1 = s.radar.earth_s1.cpr_median;
+          return (
+            <div key={s.id} className="rounded border border-holds/60 p-3">
+              <dt className="text-xs text-muted">Earth · {s.earth_name} (close study)</dt>
+              <dd className="mt-0.5 text-lg font-semibold tabular-nums">
+                {cpr != null ? <>CPR {cpr.toFixed(2)}</> : <>VH/VV {s1?.toFixed(2) ?? "—"}</>}{" "}
+                <span className="text-sm font-normal text-muted">
+                  {cpr != null ? "median, RADARSAT Constellation" : "median, Sentinel-1 indicator, not CPR"}
+                </span>
+              </dd>
+              <dd className="mt-1 text-xs">
+                <Link to={`/close-study/${s.id}`} className="text-holds underline">Read the close study →</Link>
+              </dd>
+            </div>
+          );
+        }) : (
+          <div className="rounded border border-dashed border-edge p-3">
+            <dt className="text-xs text-muted">Earth · RADARSAT Constellation (CSA)</dt>
+            <dd className="mt-0.5 text-sm">Not in the close study.</dd>
+            <dd className="mt-1 text-[11px] text-muted">
+              Comparable CPR on Earth needs a compact-polarimetry RCM scene, freely available for Canada
+              south of ~70°N. Elsewhere only a Sentinel-1 roughness indicator exists, which is not the
+              same measurement. <Link to="/discoveries" className="underline">See the close-study pairs</Link>.
+            </dd>
+          </div>
+        )}
       </dl>
     </section>
   );
@@ -114,13 +134,18 @@ export function SiteGuide() {
   const { id } = useParams();
   const [site, setSite] = useState<Site | null | undefined>(undefined);
   const [guide, setGuide] = useState<Guide | null>(null);
+  const [portfolio, setPortfolio] = useState<PortfolioFile | null>(null);
 
   useEffect(() => {
     setGuide(null);
+    setPortfolio(null);
     api.sites().then((all) => {
       const s = all.find((x) => x.id === id) ?? null;
       setSite(s);
-      if (s) loadGuide(s).then(setGuide);
+      if (s) {
+        loadGuide(s).then(setGuide);
+        api.portfolio(s.id).then(setPortfolio);
+      }
     });
   }, [id]);
 
@@ -169,7 +194,7 @@ export function SiteGuide() {
             </dl>
           </section>
 
-          <Radar guide={guide ?? { site, cell: null, radar: null, candidates: [], traps: [] }} />
+          <Radar guide={guide ?? { site, cell: null, radar: null, candidates: [], traps: [], closeStudy: [] }} />
 
           <section>
             <h2 className="text-sm uppercase tracking-wide text-muted">Best new Earth analogs</h2>
@@ -180,6 +205,13 @@ export function SiteGuide() {
               {guide ? <Candidates guide={guide} /> : <p className="text-sm text-muted">Loading…</p>}
             </div>
           </section>
+
+          {portfolio && portfolio.sites.length > 0 && (
+            <section>
+              <h2 className="text-sm uppercase tracking-wide text-muted">Smallest set of Earth sites</h2>
+              <div className="mt-3"><Portfolio data={portfolio} siteName={site.name} /></div>
+            </section>
+          )}
 
           {guide && guide.traps.length > 0 && (
             <section>
