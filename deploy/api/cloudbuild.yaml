@@ -40,5 +40,6 @@ steps:
       - --timeout=60
 
 options:
+  dynamicSubstitutions: true   # expands ${PROJECT_ID} inside _IMAGE
   logging: CLOUD_LOGGING_ONLY
 timeout: 3600s
