@@ -49,7 +49,7 @@ Both tracks build against this. Change it only with a comment on the Team log.
 | `elev_km`, `relief_km`, `slope_med`, `slope_p90` | mars | As on the Moon, at the ~1.85 km baseline |
 | `thermal_inertia` | mars | TES, J m⁻² K⁻¹ s⁻½. Low = dust, high = rock |
 | `albedo` | mars, earth | 0–1 |
-| `dust_index` | mars | TES dust cover index. May be all NaN if the PNG can't be decoded |
+| `dust_index` | mars | Relative dust cover, 0–1, 1 = dustiest, decoded from the TES dust cover index colour map (the index values themselves are not recoverable) |
 | `weh_pct` | mars | GRS water-equivalent hydrogen, weight %. Regional (5°) |
 | `hydrous_count` | mars | CRISM hydrated-mineral detections in the tile |
 | `t_max_k`, `t_min_k` | mars | Modelled |

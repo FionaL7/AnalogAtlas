@@ -123,12 +123,14 @@ def is_mars(row: pd.Series) -> bool:
     return row.get("body") == "mars"
 
 
-# Mars: poleward of ~35 deg, ice is stable just under the surface (the SWIM
-# maps find it down to ~35 N), and GRS sees it as hydrogen. A tile that is both
-# is "ice-rich": glaciers and frozen ground on Earth are then real analogs
-# (Deuteronilus Mensae is debris-covered glacier), not lookalike traps.
-MARS_ICE_LAT = 35.0
-MARS_ICE_WEH = 6.0      # GRS water-equivalent hydrogen, weight %
+# Mars: poleward of ~40 deg, water ice is stable under a thin dry cover, and
+# it is seen there: SHARAD radar finds buried ice sheets and fresh impacts
+# expose ice down to ~39 N (Dundas et al. 2018, 2021). A tile that far from
+# the equator is "ice-rich": glaciers and frozen ground on Earth are then real
+# analogs (Deuteronilus Mensae is debris-covered glacier), not lookalike traps.
+# Latitude, not GRS hydrogen: within +/-60 deg GRS stays under ~6 wt% and is
+# averaged over ~300 km, so it cannot find mid-latitude ice (#42).
+MARS_ICE_LAT = 40.0
 ALBEDO_SCALE = 0.1      # albedo 0.1 apart -> closeness 0.37
 
 
@@ -138,8 +140,7 @@ def _has(row: pd.Series, col: str) -> bool:
 
 
 def mars_ice_rich(row: pd.Series) -> bool:
-    return bool(is_mars(row) and _has(row, "weh_pct") and row.weh_pct >= MARS_ICE_WEH
-                and abs(float(row.lat)) >= MARS_ICE_LAT)
+    return bool(is_mars(row) and abs(float(row.lat)) >= MARS_ICE_LAT)
 
 
 def push_down_for(src_row: pd.Series, dst_meta: pd.DataFrame) -> np.ndarray:
@@ -417,9 +418,11 @@ MARS_SOL_HOURS = 24.66
 # dry fines swing far, rock and damp ground swing little.
 TI_DUST, TI_ROCK = 40.0, 600.0
 SWING_ROCK_C, SWING_DUST_C = 8.0, 40.0
-# TES dust cover index: below ~0.94 dust-covered, above ~0.97 dust-free
-# (Ruff & Christensen 2002). Earth stand-in: MERRA-2 dust optical depth.
-DCI_DUSTY, DCI_CLEAR = 0.93, 0.97
+# `dust_index` is RELATIVE dust cover, 0..1 with 1 = dustiest, decoded from
+# the colour map of the TES dust cover index (Ruff & Christensen 2002); the
+# index values themselves can't be read back from the image (rasters.py,
+# #38). Earth stand-in: MERRA-2 dust optical depth, 0.3 and above = as dusty
+# as Earth gets outside the Sahara and Taklamakan.
 AOD_DUSTY = 0.3
 
 
@@ -438,8 +441,8 @@ def material_words(ti: float) -> str:
     return "loose dust" if ti < 100 else "sand and crusted soil" if ti < 350 else "rock or cemented ground"
 
 
-def mars_dustiness(dci: float) -> float:
-    return float(np.clip((DCI_CLEAR - dci) / (DCI_CLEAR - DCI_DUSTY), 0, 1))
+def dust_words(rel: float) -> str:
+    return "dust-covered" if rel >= 0.66 else "partly dusty" if rel >= 0.33 else "mostly dust-free"
 
 
 def frozen_match(lst_mean_c):
@@ -486,10 +489,12 @@ def mars_rows(mars: pd.Series, earth: pd.Series, climate: dict | None) -> list[d
             "surface swing as a stand-in; air and soil moisture damp it, so read it as a guide",
             basis="proxy")
     if _has(mars, "dust_index") and _has(earth, "dust_aod"):
-        add("Dust", f"dust cover index {mars.dust_index:.3f}", f"dust optical depth {earth.dust_aod:.2f}",
-            1 - abs(mars_dustiness(mars.dust_index) - float(np.clip(earth.dust_aod / AOD_DUSTY, 0, 1))),
-            "Mars: TES dust cover index (dust lying on the surface; lower = dustier). "
-            "Earth: MERRA-2 dust in the air. Related, not the same quantity", basis="proxy")
+        rel = float(np.clip(mars.dust_index, 0, 1))
+        add("Dust", f"{dust_words(rel)} ({rel:.2f} of the dustiest)",
+            f"dust optical depth {earth.dust_aod:.2f}",
+            1 - abs(rel - float(np.clip(earth.dust_aod / AOD_DUSTY, 0, 1))),
+            "Mars: dust lying on the surface, relative 0-1, read from the TES dust cover index "
+            "map. Earth: MERRA-2 dust in the air. Related, not the same quantity", basis="proxy")
     if climate:
         ts_min, ts_max = climate["TS_MIN"], climate["TS_MAX"]
         if _has(mars, "t_max_k") and _has(mars, "t_min_k"):
@@ -505,17 +510,17 @@ def mars_rows(mars: pd.Series, earth: pd.Series, climate: dict | None) -> list[d
             math.exp(-precip / 0.5), "NASA POWER precipitation; hyper-arid < 0.1 mm/day")
     mean_c = float(earth_mean_c(earth))
     if mars_ice_rich(mars) and not math.isnan(mean_c):
-        add("Ground ice", f"{mars.weh_pct:.0f}% water-equivalent hydrogen",
+        add("Ground ice", f"expected under a dry cover ({abs(float(mars.lat)):.0f}° from the equator)",
             f"mean surface {mean_c:.0f} °C ({'frozen ground' if mean_c < 0 else 'not frozen'})",
             float(frozen_match(mean_c)),
-            "Mars: GRS hydrogen in the top metre, averaged over ~300 km, so regional "
-            "context, not a per-tile reading. Earth: MODIS mean surface temperature "
-            "below 0 °C as a stand-in for frozen ground", basis="proxy")
-    elif _has(mars, "weh_pct"):
+            f"Mars: poleward of {MARS_ICE_LAT:.0f}°, ice is stable just below the surface, as SHARAD "
+            "radar and fresh impacts show; not measured in this tile. Earth: MODIS mean surface "
+            "temperature below 0 °C as a stand-in for frozen ground", basis="modelled")
+    if _has(mars, "weh_pct"):
         add("Near-surface water", f"{mars.weh_pct:.0f}% water-equivalent hydrogen",
             "no comparable global measurement", None,
-            "GRS hydrogen in the top metre, averaged over ~300 km: bound in minerals "
-            "here rather than ice. Regional context only", kind="no_equivalent")
+            "GRS hydrogen in the top metre, averaged over ~300 km: regional context, "
+            "not a per-tile reading", kind="no_equivalent")
     if _has(mars, "hydrous_count") and mars.hydrous_count > 0:
         add("Water-altered minerals", f"{int(mars.hydrous_count)} CRISM detections in the tile",
             "no global Earth mineral layer", None,
