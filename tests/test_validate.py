@@ -163,3 +163,58 @@ def test_ranks_are_a_permutation(index_dir):
     module = load_script()
     score = np.array([0.5, -1.0, 2.0, 0.0])
     assert list(module._ranks(score)) == [2, 4, 1, 3]
+
+
+# ----------------------------------------------------------- Mars (#40) -----
+@pytest.fixture
+def validated_mars(index_dir, tmp_path, monkeypatch):
+    """Run the script with a synthetic mars body present."""
+    from tests.conftest import write_index
+
+    write_index(index_dir.path, bodies=("mars",), seed=11)
+    moon = index_dir.meta["moon"]
+    path = tmp_path / "robbins" / "catalog.csv"
+    from tests.test_craters import write_catalog
+    write_catalog(path, [(t.lat, t.lon % 360, 5.0) for t in moon.itertuples()])
+    monkeypatch.setattr(craters, "CATALOG", path)
+
+    module = load_script()
+    monkeypatch.setattr("sys.argv", ["05_validate.py", "--ks", "5", "--no-chart"])
+    assert module.main() == 0
+    return json.loads((C.INDEX / "validation.json").read_text())
+
+
+def test_mars_keys_are_written_and_merged(validated_mars):
+    for key in ("mars_analog_ranking", "mars_visual_channels", "mars_traps",
+                "known_analog_ranking"):          # moon keys survive the merge
+        assert key in validated_mars
+
+
+def test_mars_ranking_covers_every_role(validated_mars):
+    """Unlike the Moon, every role has a Mars query site, so no surface analog
+    with a land tile may be skipped for want of one."""
+    ranking = validated_mars["mars_analog_ranking"]
+    n = ranking["earth_tiles_ranked"]
+    for r in ranking["sites"]:
+        assert r["tested_roles"], f"{r['site']} has no tested role"
+        for setting in ("shipped", "image_only"):
+            assert 1 <= r[setting]["rank"] <= n
+            assert r[setting]["role"] in r["tested_roles"]
+    scored = [r for r in ranking["sites"] if r["mars_target"] and "shipped" in r]
+    assert ranking["summary"]["n"] == len(scored)
+    for reason in ranking["skipped_sites"].values():
+        assert "process analog" in reason or "no Earth tile" in reason
+
+
+def test_mars_visual_channels_compare_three_settings(validated_mars):
+    ch = validated_mars["mars_visual_channels"]["channels"]
+    assert set(ch) == {"shade_only", "look_only", "mixed_0.6"}
+    for row in ch.values():
+        assert 0 <= row["median_top_pct"] <= 100
+    assert validated_mars["mars_visual_channels"]["best"] in ch
+
+
+def test_mars_trap_rate_is_a_fraction(validated_mars):
+    t = validated_mars["mars_traps"]
+    assert 0.0 <= t["trap_rate"] <= 1.0
+    assert t["lookalikes_checked"] > 0

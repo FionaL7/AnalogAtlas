@@ -35,6 +35,8 @@ variants = {
     "Our model (shape + physics + environment)": F_full,
     "CLIP only (learned)": learn.build_features(earth, parts=("shape", "look")),
     "Physics + environment only": learn.build_features(earth, parts=("phys", "env")),
+    # what the A3 columns (albedo, dust, mean temperature) buy, per #40
+    "Our model without the A3 columns": learn.build_features(earth, exclude=learn.A3_COLUMNS),
 }
 
 # Extra checks (see validation.json "checks_note"): a one-column baseline the
@@ -50,7 +52,9 @@ val = {"method": "PU logistic regression, hold-one-out over known surface analog
                        f"more than 'barren and dry'. '{REGION}' hides every known site within 1,500 km of the "
                        "test site, so the model can't score by learning where sites cluster; it is the closer "
                        "proxy for an unseen region. 'random_sites_control': hold-one-out medians when random "
-                       "tiles pose as known sites; ~50 means the method doesn't find signal in noise."),
+                       "tiles pose as known sites; ~50 means the method doesn't find signal in noise. "
+                       "'Our model without the A3 columns' trains without albedo, dust and mean surface "
+                       "temperature (#39): the gap to the full model is what those columns are worth (#40)."),
        "targets": {}}
 
 for target in (None, "moon", "mars"):

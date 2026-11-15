@@ -61,7 +61,14 @@ TABULAR = {
     "urban_frac": "urban",
     "brightness": "surface brightness",
     "greenness": "greenness",
+    # A3 Earth counterpart columns (#39), so Mars-facing dimensions can pull
+    # their weight: albedo matches TES, dust matches the TES dust index, mean
+    # temperature matches the modelled Mars extremes. A4 measures their worth.
+    "albedo": "albedo (sunlight reflected)",
+    "dust_aod": "atmospheric dust (MERRA-2)",
+    "lst_mean_c": "mean surface temperature",
 }
+A3_COLUMNS = ("albedo", "dust_aod", "lst_mean_c")
 GROUPS = {"shape": "terrain shape (CLIP)", "look": "surface look (CLIP)"}
 
 
@@ -72,7 +79,10 @@ class Features:
     group: list[str]         # "shape", "look", "phys", "env"
 
 
-def build_features(earth: BodyIndex, parts=("shape", "look", "phys", "env")) -> Features:
+def build_features(earth: BodyIndex, parts=("shape", "look", "phys", "env"),
+                   exclude: tuple[str, ...] = ()) -> Features:
+    """`exclude` drops named tabular columns -- used to measure what the A3
+    columns add by training once without them."""
     m = earth.meta.copy()
     m["log_precip"] = np.log1p(m.precip_mm)
     blocks, names, group = [], [], []
@@ -85,7 +95,9 @@ def build_features(earth: BodyIndex, parts=("shape", "look", "phys", "env")) -> 
         names += [f"look_{i}" for i in range(N_PCA)]
         group += ["look"] * N_PCA
     for part, cols in (("phys", ["slope_med", "slope_p90", "relief_km"]),
-                       ("env", [c for c in TABULAR if c not in ("slope_med", "slope_p90", "relief_km")])):
+                       ("env", [c for c in TABULAR
+                                if c not in ("slope_med", "slope_p90", "relief_km")
+                                and c not in exclude])):
         if part in parts:
             t = m[cols].astype(float)
             blocks.append(t.fillna(t.median()).values)

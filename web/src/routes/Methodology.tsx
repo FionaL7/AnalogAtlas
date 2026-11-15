@@ -214,6 +214,100 @@ function KnownAnalogs({ data }: { data: KnownAnalogRanking }) {
   );
 }
 
+/** Mars validation (#40): the same known-analog test with Mars as the source
+ * body, plus the visual-channel comparison and the Mars trap rate. The keys
+ * are new, so they are typed here until the shared types catch up. */
+type MarsRanking = Omit<KnownAnalogRanking, "sites"> & {
+  sites: (Omit<KnownAnalogRanking["sites"][number], "moon_target"> & { mars_target: boolean })[];
+};
+type MarsChannels = {
+  channels: Record<string, { median_top_pct: number; in_top_5pct: number; n: number }>;
+  best: string;
+  recommendation: string;
+};
+type MarsTraps = { trap_rate: number; traps: number; lookalikes_checked: number };
+const CHANNEL_LABEL: Record<string, string> = {
+  shade_only: "Hillshade only (what ships)",
+  look_only: "Viking colour only",
+  "mixed_0.6": "Mixed (60% hillshade)",
+};
+
+function MarsAnalogs({ data, channels, traps }:
+  { data: MarsRanking; channels?: MarsChannels; traps?: MarsTraps }) {
+  const scored = data.sites.filter((s) => s.mars_target && s.shipped);
+  const s = data.summary;
+
+  return (
+    <>
+      <p className="mt-2 text-muted">
+        The same test, with Mars as the source body — and a stronger one, because unlike the Moon
+        every role is testable: Mars has arid sites, water-altered sites (Jezero, Oxia Planum) and
+        ice-rich landing zones (Arcadia, Utopia, Deuteronilus) to query from. Lower is better; 50%
+        is chance.
+      </p>
+      {s.median_top_pct !== null && (
+        <p className="mt-3 text-base">
+          Of {s.n} Mars analogs, the median lands in the{" "}
+          <strong className="text-holds">top {s.median_top_pct}%</strong> of{" "}
+          {data.earth_tiles_ranked.toLocaleString()} Earth tiles, {s.in_top_1pct} in the top 1% and{" "}
+          {s.in_top_10pct} in the top 10%.
+        </p>
+      )}
+      <BarList
+        caption="Rank of each known Mars analog, as a top percentage of all Earth tiles"
+        max={100}
+        reference={{ value: 50, label: "chance, 50%" }}
+        bars={scored.map((row) => ({
+          label: row.site.replace(/,.*$/, ""),
+          value: row.shipped!.top_pct,
+          display: `top ${row.shipped!.top_pct}%`,
+          highlight: row.shipped!.top_pct <= 1,
+          detail: `${row.site}: rank ${row.shipped!.rank} of ${data.earth_tiles_ranked} queried from ${row.shipped!.query} (role: ${row.shipped!.role}); image-only ${row.image_only?.top_pct ?? "n/a"}%${row.shipped!.pushed_down ? "; pushed down by the environment checks" : ""}`,
+        }))}
+      />
+      {channels && (
+        <>
+          <h3 className="mt-4 font-semibold">Does the Viking colour channel help?</h3>
+          <p className="mt-2 text-muted">
+            The risk in the plan: Viking colour and Earth's Blue Marble look so different that
+            mixing the colour channel in would drag the ranking down. Measured on the medians above:
+          </p>
+          <BarList
+            caption="Median known-analog rank per visual channel"
+            max={50}
+            bars={Object.entries(channels.channels).map(([k, c]) => ({
+              label: CHANNEL_LABEL[k] ?? k,
+              value: c.median_top_pct,
+              display: `top ${c.median_top_pct}%`,
+              highlight: k === channels.best,
+              detail: `${CHANNEL_LABEL[k] ?? k}: median top ${c.median_top_pct}%, ${c.in_top_5pct}/${c.n} in top 5%`,
+            }))}
+          />
+          <p className="mt-2 text-xs text-muted">Conclusion: {channels.recommendation}.</p>
+        </>
+      )}
+      {traps && (
+        <p className="mt-3 text-muted">
+          Lookalike traps exist on Mars too: of each Mars tile's top {""}
+          {Math.round(traps.lookalikes_checked / data.earth_tiles_ranked) || 20} Earth lookalikes
+          by terrain shape alone, {Math.round(1000 * traps.trap_rate) / 10}% fail a hard physical
+          check (ice, plants, water) — {traps.traps.toLocaleString()} of{" "}
+          {traps.lookalikes_checked.toLocaleString()} checked.
+        </p>
+      )}
+      <h3 className="mt-4 font-semibold">What the Mars numbers cannot say</h3>
+      <ul className="mt-2 list-disc pl-5 text-muted">
+        <li>GRS water is measured in 5° (~300 km) bins: regional context, never a per-tile match.</li>
+        <li>Thermal inertia against Earth's day–night swing is a proxy, and Earth's air and moisture distort it.</li>
+        <li>The dust index is decoded from a published colour map, so it is relative, not in physical units.</li>
+        <li>Mars surface temperatures are modelled from latitude, albedo and thermal inertia, not measured.</li>
+        <li>Hydrated-mineral counts are empty until the Trek feature service returns.</li>
+        <li>0.6 kPa of CO₂, 38% gravity, radiation, perchlorates and global dust storms have no Earth analog at all.</li>
+      </ul>
+    </>
+  );
+}
+
 /** #32: the polar dimensions report but do not rank, and this is the cost. */
 function PolarAnalogs({ data }: { data: PolarAnalogRanking }) {
   const sites = Object.entries(data.by_query_site ?? {});
@@ -272,6 +366,10 @@ export function Methodology() {
   const crater = validation?.crater_retrieval;
   const known = validation?.known_analog_ranking;
   const polar = validation?.polar_analog_ranking;
+  const v = validation as Record<string, unknown> | null | undefined;
+  const marsRanking = v?.mars_analog_ranking as MarsRanking | undefined;
+  const marsChannels = v?.mars_visual_channels as MarsChannels | undefined;
+  const marsTraps = v?.mars_traps as MarsTraps | undefined;
 
   // Hints elsewhere link to /methodology#<section> (#53). The router does not
   // scroll to a hash, so do it here. The linked sections are static, above
@@ -379,6 +477,18 @@ export function Methodology() {
       ) : (
         <p className="mt-2 text-muted">
           Not exported yet. Run <code>scripts/05_validate.py</code>, then <code>scripts/03_export.py</code>.
+        </p>
+      )}
+
+      <h2 className="mt-6 font-semibold">Mars: the same tests on a second world</h2>
+      {validation === undefined ? (
+        <p className="mt-2 text-muted">Loading…</p>
+      ) : marsRanking ? (
+        <MarsAnalogs data={marsRanking} channels={marsChannels} traps={marsTraps} />
+      ) : (
+        <p className="mt-2 text-muted">
+          Not exported yet. Build the mars index, then run <code>scripts/05_validate.py</code> and{" "}
+          <code>scripts/03_export.py</code>.
         </p>
       )}
 

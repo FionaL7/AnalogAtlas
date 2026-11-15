@@ -262,7 +262,7 @@ describe("pages from the static export", () => {
     serve({ ...FILES, "/data/validation.json": { analog_model: VALIDATION.analog_model } });
     at("/methodology");
     expect(await screen.findByText(/top 9.5%/, { selector: "strong" })).toBeInTheDocument();
-    expect(screen.getAllByText(/05_validate.py/).length).toBe(2);
+    expect(screen.getAllByText(/05_validate.py/).length).toBe(3); // #16 x2 + the Mars section (#40)
     // with no polar key the page still states what ranks and what only reports
     expect(screen.getByText(/do not affect the ranking/)).toBeInTheDocument();
   });
