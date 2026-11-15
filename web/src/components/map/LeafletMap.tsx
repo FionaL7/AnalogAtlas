@@ -19,16 +19,10 @@ import { BASEMAPS } from "../../lib/basemaps";
 import { percent } from "../../lib/format";
 import { LEGEND_TICKS, scoreColour } from "../../lib/palette";
 import { CRS_MOON_SOUTH_POLAR, polarCellCorners } from "../../lib/polar";
-import { isPolar, type Body, type TileCell } from "../../lib/types";
+import { BODY_NAME, isPolar, type TileCell } from "../../lib/types";
 import type { MapMarker, MapPaneProps } from "./MapPane";
 
 const WORLD = L.latLngBounds([-90, -180], [90, 180]);
-
-const BODY_LABEL: Record<Body, string> = {
-  moon: "Moon",
-  moon_polar: "Moon south pole",
-  earth: "Earth",
-};
 
 /** The full tile grid as faint outlines. Imperative, on one canvas: ~12k
  * rectangles as React components would re-reconcile on every render.
@@ -137,7 +131,7 @@ export default function LeafletMap({
   return (
     <div
       role="region"
-      aria-label={`${BODY_LABEL[body]} map`}
+      aria-label={`${BODY_NAME[body]} map`}
       className={`relative h-full min-h-[18rem] overflow-hidden rounded-lg border border-edge ${
         onMapClick ? "[&_.leaflet-container]:cursor-crosshair" : ""}`}
     >

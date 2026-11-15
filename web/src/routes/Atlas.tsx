@@ -18,8 +18,9 @@ import { SearchBox, type SearchInput } from "../components/panels/SearchBox";
 import { SearchResults } from "../components/panels/SearchResults";
 import * as api from "../lib/api";
 import { coords } from "../lib/format";
-import type {
-  AnalogHit, AnalogsResponse, Body, SearchHit, Site, TileCell, Trap, TwinsResponse,
+import {
+  BODY_NAME, SOURCE_BODIES, type AnalogHit, type AnalogsResponse, type Body, type SearchHit,
+  type Site, type SourceBody, type TileCell, type Trap, type TwinsResponse,
 } from "../lib/types";
 
 const DEFAULT_W_PHYS = 0.3;
@@ -28,14 +29,21 @@ const DEFAULT_W_PHYS = 0.3;
 const IN_INDEX: Record<Body, (lat: number) => boolean> = {
   moon: (lat) => Math.abs(lat) <= 60,
   moon_polar: (lat) => lat <= -75,
+  mars: (lat) => Math.abs(lat) <= 60,
   earth: (lat) => Math.abs(lat) <= 82,
 };
 const OUTSIDE: Record<Body, string> = {
   moon: "The Moon index covers 60°S to 60°N. For the pole, switch the lunar map to the south pole.",
   moon_polar: "The south pole index covers 75°S to 90°S.",
+  mars: "The Mars index covers 60°S to 60°N.",
   earth: "The Earth index covers 82°S to 82°N.",
 };
-const BODY_NAME: Record<Body, string> = { moon: "Moon", moon_polar: "Moon south pole", earth: "Earth" };
+/** The buttons that pick which world sits beside Earth. */
+const WORLD_BUTTON: Record<SourceBody, string> = {
+  moon: "Moon 60°S–60°N", moon_polar: "Moon south pole", mars: "Mars",
+};
+const isSource = (v: string | null): v is SourceBody =>
+  (SOURCE_BODIES as readonly string[]).includes(v ?? "");
 
 interface Source {
   body: Body;
@@ -46,7 +54,7 @@ interface Source {
 }
 
 function parseSrc(v: string | null): { body: Body; lat: number; lon: number } | null {
-  const m = v?.match(/^(moon|moon_polar|earth):(-?[\d.]+),(-?[\d.]+)$/);
+  const m = v?.match(/^(moon|moon_polar|mars|earth):(-?[\d.]+),(-?[\d.]+)$/);
   return m ? { body: m[1] as Body, lat: Number(m[2]), lon: Number(m[3]) } : null;
 }
 
@@ -57,7 +65,9 @@ export function Atlas() {
   const newOnly = params.get("new") === "1";
   const wPhys = Number(params.get("w") ?? DEFAULT_W_PHYS);
   const srcParam = params.get("src");
-  const lunarParam: Body = params.get("lunar") === "moon_polar" ? "moon_polar" : "moon";
+  // `lunar` keeps its name so old links still work; it now also takes `mars`.
+  const worldParam = params.get("lunar");
+  const lunarParam: SourceBody = isSource(worldParam) ? worldParam : "moon";
 
   const [sites, setSites] = useState<Site[]>([]);
   const [analogs, setAnalogs] = useState<AnalogsResponse | null>(null);
@@ -70,18 +80,20 @@ export function Atlas() {
   const [searchBody, setSearchBody] = useState<Body>("moon");
   const [search, setSearch] = useState<{ label: string; body: Body; hits: SearchHit[] } | null>(null);
 
-  const [grids, setGrids] = useState<Record<Body, TileCell[]>>({ moon: [], moon_polar: [], earth: [] });
+  const [grids, setGrids] = useState<Record<Body, TileCell[]>>(
+    { moon: [], moon_polar: [], mars: [], earth: [] });
 
   useEffect(() => {
     api.sites().then(setSites);
     // Full grids come from the static export; empty until 03_export.py has run.
-    // moon_polar is absent unless the polar index was built (#26), so it must
-    // not take the others down with it.
+    // moon_polar and mars are absent unless those indexes were built (#26,
+    // docs/MARS-PLAN.md), so they must not take the others down with them.
     Promise.all([
       api.tiles("moon"),
       api.tiles("earth"),
       api.tiles("moon_polar").catch(() => [] as TileCell[]),
-    ]).then(([moon, earth, moon_polar]) => setGrids({ moon, earth, moon_polar }));
+      api.tiles("mars").catch(() => [] as TileCell[]),
+    ]).then(([moon, earth, moon_polar, mars]) => setGrids({ moon, earth, moon_polar, mars }));
   }, []);
 
   const site = sites.find((s) => s.id === siteId) ?? null;
@@ -92,13 +104,16 @@ export function Atlas() {
   }, [site, srcParam]);
 
   const srcBody = source?.body ?? null;
-  /** The body the ranked analogs are on. The API pairs Earth with the
-   *  equatorial Moon index and every lunar body with Earth. */
-  const dstBody: Body | null = srcBody === null ? null : srcBody === "earth" ? "moon" : "earth";
-  /** The lunar half of the pair of maps. */
-  const lunarBody: Body =
-    srcBody === "moon" || srcBody === "moon_polar" ? srcBody
-    : srcBody === "earth" ? "moon"
+  /** From Earth, the analogs are on the world shown beside it: Mars if the
+   *  Mars map is up, else the equatorial Moon (the pole has too few tiles to
+   *  search from Earth). */
+  const earthDst: SourceBody = lunarParam === "mars" ? "mars" : "moon";
+  /** The body the ranked analogs are on. Every Moon or Mars body pairs with Earth. */
+  const dstBody: Body | null = srcBody === null ? null : srcBody === "earth" ? earthDst : "earth";
+  /** The other world's half of the pair of maps (the name predates Mars). */
+  const lunarBody: SourceBody =
+    srcBody !== null && srcBody !== "earth" ? srcBody
+    : srcBody === "earth" ? earthDst
     : search && search.body !== "earth" ? search.body
     : lunarParam;
 
@@ -122,6 +137,7 @@ export function Atlas() {
     const req = {
       src_body: source.body, lat: source.lat, lon: source.lon,
       k: 12, new_only: newOnly, w_phys: wPhys,
+      ...(source.body === "earth" && earthDst !== "moon" ? { dst_body: earthDst } : {}),
     };
     // The static export is precomputed at the default weight; any other weight
     // has to ask the API.
@@ -134,7 +150,7 @@ export function Atlas() {
         setError(e.message);
       })
       .finally(() => setBusy(false));
-  }, [source, newOnly, wPhys]);
+  }, [source, newOnly, wPhys, earthDst]);
 
   // ---- report card for the selected pair ----------------------------------
   useEffect(() => {
@@ -144,11 +160,11 @@ export function Atlas() {
     }
     const pending =
       srcBody === "earth"
-        // Earth source: the selected hit is the lunar tile, the source the Earth one.
-        ? api.twins(tileId, analogs.src_tile.tile_id, undefined, "moon")
+        // Earth source: the selected hit is the Moon or Mars tile, the source the Earth one.
+        ? api.twins(tileId, analogs.src_tile.tile_id, undefined, earthDst)
         : api.twins(analogs.src_tile.tile_id, tileId, site?.id, srcBody);
     pending.then(setCard).catch((e: Error) => setError(e.message));
-  }, [analogs, tileId, srcBody, site]);
+  }, [analogs, tileId, srcBody, site, earthDst]);
 
   // ---- lookalike traps for a preset site (#30) ----------------------------
   useEffect(() => {
@@ -174,7 +190,9 @@ export function Atlas() {
     update({
       site: null, tile: null,
       src: `${body}:${lat.toFixed(3)},${lon.toFixed(3)}`,
-      lunar: body === "earth" ? null : body,
+      // An Earth click keeps Mars beside it if Mars is showing; else the Moon.
+      lunar: body === "earth" ? (lunarParam === "mars" ? "mars" : null)
+        : body === "moon" ? null : body,
     });
   };
 
@@ -263,11 +281,16 @@ export function Atlas() {
                   ))}
                 </optgroup>
                 <optgroup label="Other Moon sites">
-                  {sites.filter((s) => !s.is_base_region && s.body !== "earth").map((s) => (
+                  {sites.filter((s) => !s.is_base_region && (s.body === "moon" || s.body === "moon_polar")).map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </optgroup>
-                <optgroup label="Earth sites (find Moon terrain)">
+                <optgroup label="Mars landing and exploration sites">
+                  {sites.filter((s) => s.body === "mars").map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Earth sites (find Moon or Mars terrain)">
                   {sites.filter((s) => s.body === "earth").map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
@@ -313,25 +336,25 @@ export function Atlas() {
         </div>
 
         <div className="flex items-center gap-2 text-xs text-muted">
-          Lunar map:
-          {(["moon", "moon_polar"] as Body[]).map((b) => (
+          Compare Earth with:
+          {SOURCE_BODIES.map((b) => (
             <button
               key={b}
               type="button"
               aria-pressed={lunarBody === b}
               disabled={srcBody !== null && srcBody !== "earth" && srcBody !== b}
-              onClick={() => update({ lunar: b === "moon" ? null : b })}
+              onClick={() => update({ lunar: b === "moon" ? null : b, tile: null })}
               className={`rounded border border-edge px-2 py-0.5 disabled:opacity-40 ${
                 lunarBody === b ? "bg-edge text-ink" : "hover:text-ink"}`}
             >
-              {b === "moon" ? "60°S–60°N" : "South pole"}
+              {WORLD_BUTTON[b]}
             </button>
           ))}
           {notice && <span role="status" className="ml-2 text-breaks">{notice}</span>}
         </div>
 
-        {/* Earth is always the left pane and the Moon always the right one,
-            whichever direction the search runs (#26). */}
+        {/* Earth is always the left pane and the Moon or Mars always the right
+            one, whichever direction the search runs (#26). */}
         <div className="grid gap-4 md:grid-cols-2">
           {(["earth", lunarBody] as Body[]).map((body) => (
             <div key={body} className="h-72 lg:h-[26rem]">

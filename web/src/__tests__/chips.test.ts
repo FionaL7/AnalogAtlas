@@ -1,7 +1,7 @@
 /** Tile chips must show the same 85 km of ground the index was built from. */
 import { describe, expect, it } from "vitest";
 
-import { chipFor, lunarBodyOf, type ChipPiece } from "../lib/chips";
+import { chipFor, sourceBodyOf, type ChipPiece } from "../lib/chips";
 import { spForward } from "../lib/geo";
 
 /** The pieces must tile the unit square with no gap at any edge. */
@@ -56,6 +56,24 @@ describe("chipFor", () => {
     expect(chip.pieces[0].url).toContain("/Moon/SP/LRO_LOLA_Shade_SPole75");
   });
 
+  it("cuts Mars chips from Mars Trek at zoom 7, square on the ground", () => {
+    const eq = chipFor("mars", { lat: 0.7, lon: 0.5 });
+    const high = chipFor("mars", { lat: 49.02, lon: -171.85 }, "shade");
+    covers(eq.pieces);
+    covers(high.pieces);
+    expect(eq.pieces[0].url).toMatch(/\/Mars\/EQ\/Mars_Viking_MDIM21_ClrMosaic_global_232m\/1\.0\.0\/default\/default028mm\/7\//);
+    expect(high.pieces[0].url).toContain("Mars_MOLA_blend200ppx_HRSC_Shade");
+    expect(high.source).toMatch(/Mars Trek/);
+    // 1/cos(49°) wider in longitude, so each source tile is narrower in the chip
+    expect(high.pieces[0].width).toBeLessThan(eq.pieces[0].width * 0.7);
+    // zoom 7 has 256 columns and 128 rows
+    for (const p of [...eq.pieces, ...high.pieces]) {
+      const [, row, col] = p.url.match(/\/7\/(\d+)\/(\d+)\.jpg$/)!;
+      expect(Number(row)).toBeLessThan(128);
+      expect(Number(col)).toBeLessThan(256);
+    }
+  });
+
   it("finds the same polar chip from lat/lon alone", () => {
     const [x, y] = spForward(-87.45, -5.17);
     const a = chipFor("moon_polar", { lat: -87.45, lon: -5.17 });
@@ -64,9 +82,14 @@ describe("chipFor", () => {
   });
 });
 
-describe("lunarBodyOf", () => {
+describe("sourceBodyOf", () => {
   it("tells a polar report-card record from an equatorial one", () => {
-    expect(lunarBodyOf({ tile_id: "moonsp_3_4", x_m: 1 })).toBe("moon_polar");
-    expect(lunarBodyOf({ tile_id: "moon_6_1_2" })).toBe("moon");
+    expect(sourceBodyOf({ tile_id: "moonsp_3_4", x_m: 1 })).toBe("moon_polar");
+    expect(sourceBodyOf({ tile_id: "moon_6_1_2" })).toBe("moon");
+  });
+
+  it("recognises a Mars record by its body or its tile id", () => {
+    expect(sourceBodyOf({ tile_id: "mars_7_51_183" })).toBe("mars");
+    expect(sourceBodyOf({ tile_id: "x", body: "mars" })).toBe("mars");
   });
 });

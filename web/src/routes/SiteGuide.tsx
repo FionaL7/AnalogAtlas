@@ -1,4 +1,4 @@
-/** One field guide: a lunar site, its radar evidence, its best new Earth
+/** One field guide: a Moon or Mars site, its radar evidence (Moon), its best new Earth
  * analogs with what to test there, and the lookalikes to avoid. Everything
  * comes from the static export, so it works with the API down. */
 import { useEffect, useState } from "react";
@@ -155,6 +155,8 @@ export function SiteGuide() {
   }
   const cell = guide?.cell;
   const polar = site.body === "moon_polar";
+  const mars = site.body === "mars";
+  const dem = mars ? "MOLA" : "LOLA";
 
   return (
     <article className="mx-auto flex max-w-5xl flex-col gap-8">
@@ -163,7 +165,8 @@ export function SiteGuide() {
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">
             <Link to="/sites" className="hover:text-ink">Field guides</Link> ·{" "}
-            {site.is_base_region ? "Artemis candidate base region" : "Moon site"}
+            {site.is_base_region ? "Artemis candidate base region"
+              : mars ? "Mars landing or exploration site" : "Moon site"}
           </p>
           <h1 className="mt-1 text-2xl font-semibold">{site.name}</h1>
           <p className="text-sm text-muted">{coords(site.lat, site.lon)}</p>
@@ -181,8 +184,23 @@ export function SiteGuide() {
           <section>
             <h2 className="text-sm uppercase tracking-wide text-muted">The ground, at 85 km</h2>
             <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Fact label="Median slope" value={cell?.slope_med != null ? `${cell.slope_med.toFixed(1)}°` : "—"} note="LOLA" />
-              <Fact label="Local relief" value={cell?.relief_km != null ? `${cell.relief_km.toFixed(2)} km` : "—"} note="LOLA" />
+              <Fact label="Median slope" value={cell?.slope_med != null ? `${cell.slope_med.toFixed(1)}°` : "—"} note={dem} />
+              <Fact label="Local relief" value={cell?.relief_km != null ? `${cell.relief_km.toFixed(2)} km` : "—"} note={dem} />
+              {mars && (
+                <>
+                  <Fact label="Thermal inertia"
+                        value={cell?.thermal_inertia != null ? cell.thermal_inertia.toFixed(0) : "—"}
+                        note="TES. Low = loose dust, high = rock" />
+                  <Fact label="Brightness (albedo)"
+                        value={cell?.albedo != null ? cell.albedo.toFixed(2) : "—"} note="TES" />
+                  <Fact label="Water-equivalent hydrogen"
+                        value={cell?.weh_pct != null ? `${cell.weh_pct.toFixed(0)}%` : "—"}
+                        note="GRS, top metre, ~300 km average" />
+                  <Fact label="Water-altered minerals"
+                        value={cell?.hydrous_count != null ? String(cell.hydrous_count) : "—"}
+                        note="CRISM detections in the tile" />
+                </>
+              )}
               {polar && (
                 <>
                   <Fact label="Best-lit point" value={percent(cell?.illum_max)} note="of the time, LOLA 18.6-yr model" />
@@ -194,7 +212,10 @@ export function SiteGuide() {
             </dl>
           </section>
 
-          <Radar guide={guide ?? { site, cell: null, radar: null, candidates: [], traps: [], closeStudy: [] }} />
+          {/* Radar roughness is a Mini-RF (Moon) measurement; Mars has no counterpart here. */}
+          {!mars && (
+            <Radar guide={guide ?? { site, cell: null, radar: null, candidates: [], traps: [], closeStudy: [] }} />
+          )}
 
           <section>
             <h2 className="text-sm uppercase tracking-wide text-muted">Best new Earth analogs</h2>

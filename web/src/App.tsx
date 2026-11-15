@@ -27,7 +27,7 @@ export default function App() {
       <header className="flex flex-wrap items-center gap-3 border-b border-edge px-4 py-3">
         <strong className="text-base">AnalogAtlas</strong>
         <span className="hidden text-xs text-muted sm:inline">
-          Earth analogs for Moon-base sites
+          Earth analogs for Moon-base and Mars landing sites
         </span>
         <nav className="ml-auto flex flex-wrap items-center gap-1">
           <NavLink to="/" className={link} end>Atlas</NavLink>

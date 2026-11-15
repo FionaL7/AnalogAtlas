@@ -18,6 +18,9 @@ export const POLAR_MAX_LAT = -75;
 /** config.MOON_ZOOM and MOON_TILE_DEG: the equatorial Moon grid. */
 export const MOON_ZOOM = 6;
 export const MOON_TILE_DEG = 180 / 2 ** MOON_ZOOM;
+/** The Mars grid: Trek zoom-7 tiles, 1.406° = ~83 km (docs/MARS-PLAN.md). */
+export const MARS_ZOOM = 7;
+export const MARS_TILE_DEG = 180 / 2 ** MARS_ZOOM;
 /** config.TILE_KM: every tile, on every body, is this wide on the ground. */
 export const TILE_KM = MOON_TILE_DEG * ((2 * Math.PI * MOON_RADIUS_M) / 1000 / 360);
 /** config.EARTH_TILE_DEG_LAT */

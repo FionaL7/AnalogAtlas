@@ -19,6 +19,7 @@ interface Props {
 const BODY_OPTIONS: { value: Body; label: string }[] = [
   { value: "moon", label: "Moon (60°S–60°N)" },
   { value: "moon_polar", label: "Moon south pole" },
+  { value: "mars", label: "Mars (60°S–60°N)" },
   { value: "earth", label: "Earth" },
 ];
 
@@ -32,6 +33,14 @@ function readAsDataUrl(file: File): Promise<string> {
     r.readAsDataURL(file);
   });
 }
+
+/** An example of what to type, in terrain that body actually has. */
+const PLACEHOLDER: Record<Body, string> = {
+  moon: "smooth flat dark lava plains",
+  moon_polar: "deep shadowed crater with a sharp rim",
+  mars: "layered canyon walls, or a dry river delta",
+  earth: "dry lake bed ringed by volcanoes",
+};
 
 export function SearchBox({ body, onBodyChange, onSearch, busy, error }: Props) {
   const [value, setValue] = useState("");
@@ -70,7 +79,7 @@ export function SearchBox({ body, onBodyChange, onSearch, busy, error }: Props) 
           id="q"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="smooth flat dark lava plains"
+          placeholder={PLACEHOLDER[body]}
           className="min-w-0 flex-1 rounded border border-edge bg-base px-3 py-2 text-sm
                      focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1"
         />

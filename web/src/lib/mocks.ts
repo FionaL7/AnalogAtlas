@@ -26,6 +26,21 @@ export const MOCK_SITES: Site[] = [
   { id: "apollo-15", body: "moon", name: "Apollo 15 — Hadley Rille", lat: 26.13, lon: 3.63,
     blurb: "Mare surface cut by a sinuous rille, against the Apennine front." },
   { id: "tycho", body: "moon", name: "Tycho crater", lat: -43.31, lon: -11.36 },
+  // The seven Mars sites in docs/TARGET-SITES.md (R1-R7).
+  { id: "arcadia-planitia", body: "mars", name: "Arcadia Planitia", lat: 49.02, lon: -171.85,
+    blurb: "Human landing zone candidate: ice tens of centimetres below the surface, at low elevation." },
+  { id: "deuteronilus-mensae", body: "mars", name: "Deuteronilus Mensae", lat: 45.11, lon: 23.92,
+    blurb: "Human landing zone candidate: debris-covered glaciers." },
+  { id: "utopia-planitia", body: "mars", name: "Utopia Planitia", lat: 46.74, lon: 117.52,
+    blurb: "Human landing zone candidate: ground ice and scalloped terrain, near the Zhurong rover." },
+  { id: "jezero-crater", body: "mars", name: "Jezero crater", lat: 18.41, lon: 77.69,
+    blurb: "Perseverance rover site: a river delta with carbonates." },
+  { id: "gale-crater", body: "mars", name: "Gale crater", lat: -5.37, lon: 137.81,
+    blurb: "Curiosity rover site: layered sediments, from clays to sulfates." },
+  { id: "oxia-planum", body: "mars", name: "Oxia Planum", lat: 17.28, lon: -25.71,
+    blurb: "Rosalind Franklin rover site: very clay-rich plains." },
+  { id: "medusae-fossae", body: "mars", name: "Medusae Fossae", lat: -2.17, lon: -164.2,
+    blurb: "Wind-carved ridges in soft deposits, and a source of dust." },
   { id: "atacama", body: "earth", name: "Atacama Desert, Chile", lat: -24.1, lon: -69.9 },
 ];
 
@@ -41,11 +56,13 @@ export function mockSearch(req: SearchRequest): SearchResponse {
       const lat =
         req.body === "moon_polar" ? -89.5 + i * 1.1
         : req.body === "moon" ? -12.3 + i * 2.8
+        : req.body === "mars" ? -5.6 + i * 1.4
         : -24.1 + i * 0.77;
       const lon = 45 - i * 2.8;
       const tile_id =
         req.body === "moon_polar" ? `moonsp_${3 + (i % 5)}_${4 + Math.floor(i / 5)}`
         : req.body === "moon" ? `moon_6_${12 + i}_${34 + i}`
+        : req.body === "mars" ? `mars_7_${60 + i}_${200 + i}`
         : earthTile(lat, lon);
       return {
         tile_id,
@@ -91,10 +108,13 @@ const MOCK_CANDIDATES: Array<[number, number, string | null]> = [
 
 export function mockAnalogs(req: AnalogsRequest): AnalogsResponse {
   const k = req.k ?? 12;
-  // From Earth the analogs are Moon tiles, inside the 60°S-60°N Moon index.
+  // From Earth the analogs are Moon tiles (or Mars tiles, with dst_body),
+  // inside that index's 60°S-60°N.
   const toMoon = req.src_body === "earth";
+  const toMars = toMoon && req.dst_body === "mars";
   const results = MOCK_CANDIDATES.map(([lat, lon, known], i) => ({
-    tile_id: toMoon ? `moon_6_${20 + i}_${40 + i}` : earthTile(lat, lon),
+    tile_id: toMars ? `mars_7_${50 + i}_${100 + i}`
+      : toMoon ? `moon_6_${20 + i}_${40 + i}` : earthTile(lat, lon),
     lat: toMoon ? Math.max(-58, Math.min(58, lat)) : lat,
     lon,
     score: Number((0.74 - i * 0.02).toFixed(3)),
@@ -107,6 +127,7 @@ export function mockAnalogs(req: AnalogsRequest): AnalogsResponse {
   return {
     src_tile: {
       tile_id: req.src_body === "moon_polar" ? "moonsp_5_5"
+        : req.src_body === "mars" ? "mars_7_51_183"
         : toMoon ? earthTile(req.lat, req.lon) : "moon_6_0_90",
       lat: req.lat,
       lon: req.lon,
@@ -133,7 +154,82 @@ const POLAR_ROWS: TwinsResponse["breakdown"] = [
     note: "A south polar base can lose line of sight to Earth entirely" },
 ];
 
+/** A Mars report card with every kind of row `analog.mars_rows` can produce. */
+function mockMarsTwins(src_tile_id: string, earth_tile_id: string): TwinsResponse {
+  return {
+    moon: { tile_id: src_tile_id, body: "mars", lat: 18.41, lon: 77.69, slope_med: 1.8,
+            relief_km: 0.9, thermal_inertia: 310, albedo: 0.18, weh_pct: 4, t_min_k: 185 },
+    earth: { tile_id: earth_tile_id, lat: -24.08, lon: -69.92, slope_med: 2.1, relief_km: 1.1,
+             visual_cos_scaled: 0.93 },
+    climate: { TS_MIN: -8.4, TS_MAX: 41.2, PRECTOTCORR: 0.01, ALLSKY_SFC_SW_DWN: 7.1 },
+    model_score: 0.97,
+    field_tests: {
+      tests: [
+        { title: "Life detection at low biomass",
+          risk: "False positives from Earth contamination, false negatives from weak instruments",
+          detail: "Hyper-arid soil holds very little life or organic matter, so life-detection instruments and clean sampling can be tested near Mars-like detection limits.",
+          based_on: ["Dryness"], strength: 0.98 },
+        { title: "Rover mobility and traverse planning", risk: "Getting stuck or tipping on slopes",
+          detail: "Slopes and relief match, so drive tests, path planners and slope-stability limits carry over. Traction will read high: Earth gravity is 2.6x Mars's.",
+          based_on: ["Median slope", "Local relief"], strength: 0.86 },
+      ],
+      avoid: [{ dimension: "Water-altered minerals",
+                reason: "Orbiters see water-altered minerals at the Mars site. We have no global Earth mineral map, so check this site's geology before planning sample-science tests." }],
+    },
+    breakdown: [
+      { dimension: "Terrain shape (ML)", moon: "-", earth: "-", match: 0.93, kind: "compare",
+        basis: "measured", note: "CLIP similarity of hillshade tiles, sun-direction invariant" },
+      { dimension: "Median slope", moon: "1.8°", earth: "2.1°", match: 0.9, kind: "compare",
+        basis: "measured", note: "MOLA vs the Earth DEM, both measured at ~1.9 km/px" },
+      { dimension: "Local relief", moon: "0.90 km", earth: "1.10 km", match: 0.9, kind: "compare",
+        basis: "measured", note: "98th-2nd percentile elevation within ~85 km" },
+      { dimension: "Surface brightness (albedo)", moon: "0.18", earth: "0.24", match: 0.55,
+        kind: "compare", basis: "measured",
+        note: "TES albedo vs MODIS albedo: how much sunlight the ground reflects" },
+      { dimension: "Surface material", moon: "310 tiu (sand and crusted soil)",
+        earth: "27 °C day-night swing", match: 0.65, kind: "compare", basis: "proxy",
+        note: "Mars: TES thermal inertia (low = loose dust, high = rock). Earth: MODIS day-night surface swing as a stand-in; air and soil moisture damp it, so read it as a guide" },
+      { dimension: "Surface temperature swing", moon: "95 K", earth: "50 K", match: 0.52,
+        kind: "compare", basis: "modelled",
+        note: "Mars: modelled from latitude, albedo and thermal inertia, not measured. Earth: NASA POWER skin temperature" },
+      { dimension: "Dryness", moon: "no liquid water at the surface", earth: "0.01 mm/day",
+        match: 0.98, kind: "compare", basis: "measured",
+        note: "NASA POWER precipitation; hyper-arid < 0.1 mm/day" },
+      { dimension: "Day length", moon: "24 h 37 min", earth: "24 h", match: 0.97, kind: "compare",
+        basis: "measured",
+        note: "Nearly the same: crew routines, daily thermal cycles and solar-power days carry over" },
+      { dimension: "Near-surface water", moon: "4% water-equivalent hydrogen",
+        earth: "no comparable global measurement", match: null, kind: "no_equivalent",
+        basis: "measured",
+        note: "GRS hydrogen in the top metre, averaged over ~300 km: bound in minerals here rather than ice. Regional context only" },
+      { dimension: "Water-altered minerals", moon: "12 CRISM detections in the tile",
+        earth: "no global Earth mineral layer", match: null, kind: "no_equivalent", basis: "measured",
+        note: "CRISM hydrated-mineral detections (clays, sulfates): a sign of past water. Check the Earth site's geology by hand" },
+      { dimension: "Atmosphere", moon: "~0.6 kPa, 95% CO₂", earth: "101 kPa, nitrogen and oxygen",
+        match: 0, kind: "earth_limit", basis: "measured",
+        note: "Under 1% of Earth's pressure: parachutes, rotors, cooling and wind loads on dust all behave differently" },
+      { dimension: "Gravity", moon: "3.71 m/s² (38% of Earth's)", earth: "9.81 m/s²", match: 0,
+        kind: "earth_limit", basis: "measured",
+        note: "Mobility and construction tests overestimate traction and load" },
+      { dimension: "Radiation", moon: "~0.67 mSv/day at the surface (Curiosity RAD)",
+        earth: "~0.007 mSv/day natural background", match: 0, kind: "earth_limit", basis: "measured",
+        note: "A thin atmosphere and no global magnetic field: cosmic rays and solar particle events reach the ground" },
+      { dimension: "Sunlight", moon: "~590 W/m² above the atmosphere (43% of Earth's)",
+        earth: "~1,361 W/m² above the atmosphere", match: 0, kind: "earth_limit", basis: "measured",
+        note: "Mars is 1.52 times farther from the Sun, so solar-power tests on Earth read high" },
+      { dimension: "Soil chemistry", moon: "0.5-1% perchlorate salts in the soil (Phoenix)",
+        earth: "trace amounts, in the driest deserts only", match: 0, kind: "earth_limit",
+        basis: "measured",
+        note: "Perchlorates are toxic and change how soil, water and organics react; Earth soils need them added for ISRU and life-detection tests" },
+      { dimension: "Global dust storms", moon: "planet-encircling storms every few Mars years",
+        earth: "regional storms only", match: 0, kind: "earth_limit", basis: "measured",
+        note: "Weeks of dimmed sunlight across the whole planet have no Earth counterpart" },
+    ],
+  };
+}
+
 export function mockTwins(src_tile_id: string, earth_tile_id: string): TwinsResponse {
+  if (src_tile_id.startsWith("mars_")) return mockMarsTwins(src_tile_id, earth_tile_id);
   const polar = src_tile_id.startsWith("moonsp_");
   return {
     moon: { tile_id: src_tile_id, lat: -89.5, lon: 0, slope_med: 4.7, relief_km: 1.2, t_min_k: 50 },
