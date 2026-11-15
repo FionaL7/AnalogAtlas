@@ -77,6 +77,31 @@ def _moon_polar_meta(rng: np.random.Generator) -> pd.DataFrame:
     ))
 
 
+def _mars_meta(rng: np.random.Generator) -> pd.DataFrame:
+    """Mars tiles with every column in the contract (docs/MARS-PLAN.md).
+    The first tile is ice-rich (high latitude, high hydrogen); the rest are not."""
+    n = 40
+    lat = np.concatenate([[48.0], rng.uniform(-30, 30, n - 1)])
+    lon = rng.uniform(-180, 180, n)
+    return pd.DataFrame(dict(
+        tile_id=[f"mars_7_{i}_{i * 2}" for i in range(n)],
+        body="mars", z=7, y=range(n), x=range(0, n * 2, 2),
+        lat=lat, lon=lon,
+        lat_min=lat - 0.7, lat_max=lat + 0.7, lon_min=lon - 0.7, lon_max=lon + 0.7,
+        elev_km=rng.uniform(-6, 8, n),
+        relief_km=rng.uniform(0.1, 5, n),
+        slope_med=rng.uniform(0.2, 10, n),
+        slope_p90=rng.uniform(1, 25, n),
+        thermal_inertia=rng.uniform(40, 600, n),
+        albedo=rng.uniform(0.1, 0.3, n),
+        dust_index=rng.uniform(0.93, 0.98, n),
+        weh_pct=np.concatenate([[9.0], rng.uniform(2, 5, n - 1)]),
+        hydrous_count=np.concatenate([[0, 3], np.zeros(n - 2, dtype=int)]),
+        t_max_k=rng.uniform(250, 290, n),
+        t_min_k=rng.uniform(150, 190, n),
+    ))
+
+
 def _earth_meta(rng: np.random.Generator) -> pd.DataFrame:
     # Spread the rest over open ocean-free longitudes far from any known site.
     lat = np.concatenate([[MCMURDO[0]], rng.uniform(-50, 50, EARTH_TILES - 1)])
@@ -94,7 +119,8 @@ def _earth_meta(rng: np.random.Generator) -> pd.DataFrame:
     ))
 
 
-BUILDERS = {"moon": _moon_meta, "moon_polar": _moon_polar_meta, "earth": _earth_meta}
+BUILDERS = {"moon": _moon_meta, "moon_polar": _moon_polar_meta, "earth": _earth_meta,
+            "mars": _mars_meta}
 
 
 def write_index(directory, bodies=("moon", "moon_polar", "earth"),

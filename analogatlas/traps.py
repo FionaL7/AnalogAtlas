@@ -1,4 +1,5 @@
-"""Lookalike traps (#30): Moon-Earth pairs that look alike but break physically.
+"""Lookalike traps (#30): Moon-Earth or Mars-Earth pairs that look alike but
+break physically.
 
 The pitch: this is what an image-only AI would recommend, and why it fails.
 
@@ -29,7 +30,7 @@ import numpy as np
 import pandas as pd
 
 from . import checks as K
-from .analog import BodyIndex, _closeness, cross_body_scores
+from .analog import BodyIndex, _closeness, cross_body_scores, is_mars, mars_ice_rich
 
 TOP_N = 20          # lookalikes considered per lunar tile
 W_PHYS = 0.3        # same default as cross_body / the API
@@ -59,8 +60,14 @@ def _num(row: pd.Series, col: str) -> float | None:
 
 
 def check(moon: pd.Series, earth: pd.Series) -> list[dict]:
-    """Which physical checks this pair fails, each with a plain reason."""
+    """Which physical checks this pair fails, each with a plain reason.
+
+    `moon` is the source tile, on the Moon or Mars. For an ice-rich Mars tile
+    an Earth ice tile is a real analog, so ice is not a trap there.
+    """
     hits = []
+    mars = is_mars(moon)
+    where = "on Mars" if mars else "on the Moon"
 
     def hit(bid: str, reason: str):
         b = BREAKERS[bid]
@@ -69,9 +76,10 @@ def check(moon: pd.Series, earth: pd.Series) -> list[dict]:
     flags = K.env_flags(earth.to_frame().T).iloc[0]
     ice, veg, water = _num(earth, "ice_frac"), _num(earth, "veg_frac"), _num(earth, "water_frac")
     ndvi, aridity = _num(earth, "ndvi"), _num(earth, "aridity")
-    if flags["ice"]:
+    if flags["ice"] and not mars_ice_rich(moon):
         hit("ice", f"{ice:.0%} permanent ice. Smooth because ice flows and snow fills the hollows; "
-                   "the Moon's plains are rock and dust")
+                   + ("this part of Mars is dry rock and dust" if mars
+                      else "the Moon's plains are rock and dust"))
     if flags["vegetation"]:
         what = (f"{veg:.0%} forest, savanna or crops" if veg is not None and veg >= K.VEG_MIN
                 else f"greenness {ndvi:.2f}")
@@ -80,13 +88,15 @@ def check(moon: pd.Series, earth: pd.Series) -> list[dict]:
         hit("water", f"{water:.0%} lakes or wetland")
     if flags["wet_climate"]:
         hit("wet_climate", f"Rain-to-evaporation ratio {aridity:.2f} (drylands are below 0.65): "
-                           "rain and rivers shaped it; the Moon has no liquid water")
+                           "rain and rivers shaped it; "
+                           + ("Mars has had no rain for billions of years" if mars
+                              else "the Moon has no liquid water"))
     s_m, s_e = _num(moon, "slope_med"), _num(earth, "slope_med")
     if s_m is not None and s_e is not None and float(_closeness(s_e, s_m, 1.0)) < SHAPE_MISMATCH:
-        hit("slope", f"Median slope {s_m:.1f}° on the Moon vs {s_e:.1f}° on Earth")
+        hit("slope", f"Median slope {s_m:.1f}° {where} vs {s_e:.1f}° on Earth")
     r_m, r_e = _num(moon, "relief_km"), _num(earth, "relief_km")
     if r_m is not None and r_e is not None and float(_closeness(r_e, r_m, 1.0)) < SHAPE_MISMATCH:
-        hit("relief", f"Height range {r_m:.2f} km on the Moon vs {r_e:.2f} km on Earth")
+        hit("relief", f"Height range {r_m:.2f} km {where} vs {r_e:.2f} km on Earth")
     return hits
 
 
@@ -95,7 +105,8 @@ def traps_for_tile(src: BodyIndex, i: int, dst: BodyIndex, src_body: str,
                    model_scores: dict[str, float] | None = None) -> list[dict]:
     """Traps among the top_n lookalikes of one source tile.
 
-    `model_scores`: Earth tile_id -> #29 analog_score_moon (0-1), if available.
+    `model_scores`: Earth tile_id -> #29 analog score for this body
+    (`analog_score_moon` or `analog_score_mars`, 0-1), if available.
     """
     score, visual, _, _ = cross_body_scores(src, i, dst, w_phys)
     order = np.argsort(-visual)
