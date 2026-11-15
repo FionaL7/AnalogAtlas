@@ -137,6 +137,49 @@ def holdout(F: Features, sites: dict[str, int]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def holdout_region(F: Features, sites: dict[str, int], meta: pd.DataFrame,
+                   radius_km: float = 1500.0) -> pd.DataFrame:
+    """Like `holdout`, but also hides every other known site within `radius_km`.
+    Known sites cluster (US Southwest, Australian craters), so plain hold-one-out
+    can score well by learning *where* sites are. This is the closer proxy for a
+    region the model has never seen."""
+    pos = set(sites.values())
+    unlabeled = np.array([i for i in range(len(F.X)) if i not in pos])
+    lat, lon = meta.lat.values, meta.lon.values
+    rows = []
+    for name, row in sites.items():
+        near = {q for q in pos if haversine_deg(lat[row], lon[row], lat[q], lon[q]) * 111.2 < radius_km}
+        train = pos - near
+        s = fit(F.X, train).decision_function(F.X)
+        rows.append({"site": name, "tile_row": row, "n_hidden": len(near),
+                     "top_pct": 100 * float((s[unlabeled] > s[row]).mean())})
+    return pd.DataFrame(rows)
+
+
+def holdout_single_column(meta: pd.DataFrame, sites: dict[str, int], col: str,
+                          higher_is_better: bool = True) -> pd.DataFrame:
+    """No-learning baseline: rank tiles by one column (e.g. bare ground). The
+    model must beat this to claim it learned more than 'barren and dry'."""
+    pos = set(sites.values())
+    unlabeled = np.array([i for i in range(len(meta)) if i not in pos])
+    v = meta[col].astype(float)
+    s = v.fillna(v.median()).values * (1 if higher_is_better else -1)
+    return pd.DataFrame([{"site": name, "tile_row": row,
+                          "top_pct": 100 * float((s[unlabeled] > s[row]).mean())}
+                         for name, row in sites.items()])
+
+
+def random_sites_control(F: Features, n_sites: int, runs: int = 5, seed: int = 0) -> list[float]:
+    """Sanity check: random tiles posing as 'known sites'. Hold-one-out medians
+    should hover around 50; if they don't, the method is finding signal in noise."""
+    rng = np.random.default_rng(seed)
+    out = []
+    for _ in range(runs):
+        fake = {f"random_{i}": int(r) for i, r in enumerate(rng.choice(len(F.X), n_sites, replace=False))}
+        out.append(round(float(holdout(F, fake).top_pct.median()), 1))
+    return out
+
+
 def holdout_visual_baseline(earth: BodyIndex, sites: dict[str, int], w_shade: float = 0.6) -> pd.DataFrame:
     """What an image-only approach does: rank tiles by CLIP similarity to the
     other known sites (best match), no physics, no learning."""

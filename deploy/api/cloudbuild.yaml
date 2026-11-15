@@ -1,0 +1,44 @@
+# Build the API image and deploy it to Cloud Run (#21).
+# Run by the Cloud Build trigger `deploy-api` on every push to main that touches
+# the API; run it by hand after pushing new data to the `data` release.
+# Setup and gotchas: docs/DEPLOY.md.
+# Note: `$` starts a substitution here, so shell variables must be written `$$`.
+
+substitutions:
+  _REGION: us-central1
+  _SERVICE: analogatlas-api
+  _IMAGE: us-central1-docker.pkg.dev/${PROJECT_ID}/analogatlas/api
+
+steps:
+  - id: stamp
+    name: bash
+    args: ["-c", "echo '${BUILD_ID}' > .build-stamp"]
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "deploy/api/Dockerfile", "-t", "${_IMAGE}:${BUILD_ID}", "-t", "${_IMAGE}:latest", "."]
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "--all-tags", "${_IMAGE}"]
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_IMAGE}:${BUILD_ID}
+      - --region=${_REGION}
+      - --allow-unauthenticated
+      - --min-instances=0        # scale to zero: ~free while idle (judging lasts weeks)
+      - --max-instances=2        # caps the bill if something hammers it
+      - --memory=2Gi
+      - --cpu=1
+      - --cpu-boost              # faster cold starts
+      - --timeout=60
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 3600s

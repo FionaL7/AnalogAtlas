@@ -164,10 +164,9 @@ The next milestone is the Earth index. Every Earth–Moon feature in the app dep
 - Laptop + Earth Engine + Colab for the pipeline (no paid compute there)
 - Two developers: Dev A (data and ML), Dev B (app and radar)
 - **Static export is not committed.** `web/public/data/` is gitignored; the deploy pulls `data/index/` from the `data` release and runs `scripts/03_export.py` before building the frontend ([#34](https://github.com/FionaL7/AnalogAtlas/issues/34), [#21](https://github.com/FionaL7/AnalogAtlas/issues/21)).
-- **Hosting: Google Cloud**, on Fiona's account: the same Cloud project as Earth Engine ([#5](https://github.com/FionaL7/AnalogAtlas/issues/5)).
-  - API on Cloud Run. Domain **marsneedsmaps.space** (Porkbun offer).
-  - Set up later today, under [#21](https://github.com/FionaL7/AnalogAtlas/issues/21).
-  - Still to settle then: frontend host (Firebase Hosting or Vercel) and the CD pipeline.
+- **Hosting** ([#21](https://github.com/FionaL7/AnalogAtlas/issues/21)). Domain **marsneedsmaps.space** (Porkbun offer).
+  - **API: Cloud Run**, scale to zero (~$1–2 over a 1–2 month judging period). Hugging Face was ruled out: Docker Spaces now need PRO. How it deploys and setup: [DEPLOY.md](DEPLOY.md).
+  - Frontend host: Firebase Hosting (free tier); setup still to do.
 
 - **Sharing `data/`: GitHub Release files** ([#8](https://github.com/FionaL7/AnalogAtlas/issues/8)), release tag `data`. Free, `gh` already works on every device, 2 GB per file. `python scripts/data.py pull|push`. The last push of a file wins.
 - **Map library: Leaflet** (react-leaflet), one map per body in EPSG:4326 ([#24](https://github.com/FionaL7/AnalogAtlas/issues/24)). Trek and GIBS tiles are plain lat/lon, which Leaflet renders natively; MapLibre only does Web Mercator or globe. The polar pane uses a custom Leaflet CRS in `web/src/lib/polar.ts` — **no proj4leaflet**: the spherical stereographic forward/inverse is six lines and Leaflet takes a custom CRS directly.
