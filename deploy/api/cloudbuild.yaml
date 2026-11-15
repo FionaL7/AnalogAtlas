@@ -8,6 +8,11 @@ substitutions:
   _REGION: us-central1
   _SERVICE: analogatlas-api
   _IMAGE: us-central1-docker.pkg.dev/${PROJECT_ID}/analogatlas/api
+  # Verdict prose (#51) is generated offline by scripts/07_verdicts.py, not by
+  # the API at request time - these are carried on the service for future use
+  # only; nothing in api/ reads them today.
+  _LLM_BASE_URL: https://generativelanguage.googleapis.com/v1beta/openai
+  _LLM_MODEL: gemini-2.5-flash
 
 steps:
   - id: stamp
@@ -38,6 +43,8 @@ steps:
       - --cpu=1
       - --cpu-boost              # faster cold starts
       - --timeout=60
+      - --set-env-vars=LLM_BASE_URL=${_LLM_BASE_URL},LLM_MODEL=${_LLM_MODEL}
+      - --set-secrets=LLM_API_KEY=llm-api-key:latest
 
 options:
   dynamicSubstitutions: true   # expands ${PROJECT_ID} inside _IMAGE

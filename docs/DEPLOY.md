@@ -84,6 +84,15 @@ Done already (#45), kept here in case the project has to be rebuilt.
    done
    ```
    `storage.objectViewer` is only needed for `gcloud builds submit`: it reads the uploaded source. The last two are for the web deploy.
+4b. **Verdict LLM secret** (#51, optional). The verdict prose is generated offline by `scripts/07_verdicts.py`, not by the API — this only puts the key on the service for future use; nothing in `api/` reads it today.
+   ```bash
+   gcloud services enable secretmanager.googleapis.com
+   printf '%s' "<the API key>" | gcloud secrets create llm-api-key --replication-policy=automatic --data-file=-
+   RUNTIME_SA=$(gcloud run services describe analogatlas-api --region=us-central1 --format='value(spec.template.spec.serviceAccountName)' 2>/dev/null || echo "$(gcloud projects describe $GCP_PROJECT --format='value(projectNumber)')-compute@developer.gserviceaccount.com")
+   gcloud secrets add-iam-policy-binding llm-api-key --member=serviceAccount:$RUNTIME_SA --role=roles/secretmanager.secretAccessor
+   gcloud secrets add-iam-policy-binding llm-api-key --member=serviceAccount:deployer@$GCP_PROJECT.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+   ```
+   Granting (`add-iam-policy-binding`) needs Owner on the project, not just Editor. `deploy/api/cloudbuild.yaml` already passes `LLM_BASE_URL`, `LLM_MODEL` and this secret as `LLM_API_KEY` to every deploy once it exists; a deploy before the secret exists fails with "Revision is not ready" until it's created.
 5. **Access for the team**:
    ```bash
    gcloud projects add-iam-policy-binding $GCP_PROJECT --member=user:<google email> --role=roles/editor
