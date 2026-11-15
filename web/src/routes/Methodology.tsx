@@ -1,12 +1,15 @@
 /** How the search works, how we checked it, and what it does not claim.
- * Validation numbers come from validation.json (#29); without it the section
- * says so instead of showing placeholders. */
+ * Validation numbers come from validation.json: the hold-one-out model (#29),
+ * and crater retrieval plus known-analog ranking (#16). Any section whose key
+ * is missing says so instead of showing placeholders. */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { BarList } from "../components/BarList";
 import * as api from "../lib/api";
-import type { ValidationFile } from "../lib/types";
+import type {
+  CraterRetrieval, KnownAnalogRanking, PolarAnalogRanking, PrecisionGroup, ValidationFile,
+} from "../lib/types";
 
 type Target = "all" | "moon" | "mars";
 const TARGET_LABEL: Record<Target, string> = { all: "All analogs", moon: "Moon analogs", mars: "Mars analogs" };
@@ -101,12 +104,174 @@ function Validation({ data }: { data: NonNullable<ValidationFile["analog_model"]
   );
 }
 
+const K = 10;
+const pct = (v: number) => Math.round(v * 1000) / 10;
+const pAt = (g: PrecisionGroup, k = K) => g[`p_at_${k}`] ?? null;
+
+/** Precision@k against Robbins crater labels, which enter nothing else (#16). */
+function Craters({ data }: { data: CraterRetrieval }) {
+  const classes = data.density_class.by_class;
+  const chance = data.density_class.overall.random_baseline;
+  const rows: [string, PrecisionGroup][] = [
+    ["Heavily cratered", classes["heavily cratered"]],
+    ["Smooth (mare)", classes.smooth],
+    ["Middling", classes.middling],
+  ];
+  const big = pAt(data.big_crater);
+
+  return (
+    <>
+      <p className="mt-2 text-muted">
+        The Robbins (2019) catalog of 1.3 million lunar craters is held out: it is not a feature and
+        not a training label. We sort all {data.tiles.toLocaleString()} Moon tiles into thirds by how
+        many craters they hold, then ask each tile for its {K} nearest neighbours by image embedding
+        and count how many fall in the same third. One in three would do that by chance.
+      </p>
+      <BarList
+        caption={`Of the ${K} nearest tiles by embedding, the percentage carrying the same crater-density label`}
+        max={100}
+        reference={{ value: pct(chance), label: `chance, ${pct(chance)}%` }}
+        bars={rows.map(([label, g]) => {
+          const p = pAt(g);
+          return {
+            label,
+            value: p === null ? 0 : pct(p),
+            display: p === null ? "—" : `${pct(p)}%`,
+            highlight: label === "Heavily cratered",
+            detail: `${label}: ${g.n_queries} queries, p@${K} ${p === null ? "n/a" : pct(p) + "%"}, chance ${pct(g.random_baseline)}%`,
+          };
+        })}
+      />
+      <p className="mt-2 text-muted">
+        The ends of the scale are what retrieval is good at — saturated highlands and smooth mare are
+        each found about twice as often as chance. The middle third is barely better than chance, and
+        a single big crater (
+        {big === null ? "not measured" : `${pct(big)}% versus ${pct(data.big_crater.random_baseline)}% chance`})
+        is a much weaker signal than overall cratering. Both are real limits, not rounding.
+      </p>
+    </>
+  );
+}
+
+/** Where the known analogs rank, queried from lunar sites of the same role (#16). */
+function KnownAnalogs({ data }: { data: KnownAnalogRanking }) {
+  const scored = data.sites.filter((s) => s.moon_target && s.shipped);
+  const others = data.sites.filter((s) => !s.moon_target && s.shipped);
+  const s = data.summary;
+  const bar = (row: KnownAnalogRanking["sites"][number]) => ({
+    label: row.site.replace(/,.*$/, ""),
+    value: row.shipped!.top_pct,
+    display: `top ${row.shipped!.top_pct}%`,
+    highlight: row.shipped!.top_pct <= 1,
+    detail: `${row.site}: rank ${row.shipped!.rank} of ${data.earth_tiles_ranked} queried from ${row.shipped!.query} (role: ${row.shipped!.role}); image-only ${row.image_only?.top_pct ?? "n/a"}%${row.shipped!.pushed_down ? "; pushed down by the environment checks" : ""}`,
+  });
+
+  return (
+    <>
+      <p className="mt-2 text-muted">
+        A volcanic analog is only a fair test when the query is a volcanic place on the Moon, so each
+        site is ranked from lunar sites that share its role — Copernicus and Tycho for impact,
+        Aristarchus and the Gruithuisen Domes for volcanic, the Artemis regions for polar. Lower is
+        better; 50% is chance.
+      </p>
+      {s.median_top_pct !== null && (
+        <p className="mt-3 text-base">
+          Of {s.n} Moon analogs, the median lands in the{" "}
+          <strong className="text-holds">top {s.median_top_pct}%</strong> of{" "}
+          {data.earth_tiles_ranked.toLocaleString()} Earth tiles, {s.in_top_1pct} in the top 1% and{" "}
+          {s.in_top_10pct} in the top 10%.
+        </p>
+      )}
+      <BarList
+        caption="Rank of each known Moon analog, as a top percentage of all Earth tiles"
+        max={100}
+        reference={{ value: 50, label: "chance, 50%" }}
+        bars={scored.map(bar)}
+      />
+      {others.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm">
+            Mars analogs, ranked for information only ({others.length})
+          </summary>
+          <p className="mt-2 text-xs text-muted">
+            These are not Moon analogs, so a poor rank here is not a failure. They are shown because
+            several are the sites a reader expects to see.
+          </p>
+          <BarList
+            caption="Rank of each Mars analog, for information only"
+            max={100}
+            reference={{ value: 50, label: "chance, 50%" }}
+            bars={others.map(bar)}
+          />
+        </details>
+      )}
+      <p className="mt-3 text-xs text-muted">
+        {Object.keys(data.skipped_sites).length} known sites are not ranked at all: process analogs
+        whose surface looks nothing like the Moon, islands with no land tile, and roles with no lunar
+        counterpart — the whole Moon is arid, so no lunar site tests an arid analog.
+      </p>
+    </>
+  );
+}
+
+/** #32: the polar dimensions report but do not rank, and this is the cost. */
+function PolarAnalogs({ data }: { data: PolarAnalogRanking }) {
+  const sites = Object.entries(data.by_query_site ?? {});
+  if (sites.length === 0) return null;
+  const shared = Object.entries(data.query_sites_sharing_a_tile ?? {});
+
+  return (
+    <>
+      <p className="mt-2 text-muted">
+        For the Artemis regions the index also carries illumination, permanently shadowed fraction and
+        Earth visibility. They appear on every report card and <strong className="text-ink">none of
+        them enter the ranking</strong>, which ranks terrain shape, slope and relief. So the
+        properties that make a place a <em>base</em> site play no part in finding its Earth analog.
+        Here is where that lands the sites the literature would name:
+      </p>
+      {sites.map(([site, row]) => (
+        <div key={site} className="mt-3">
+          <h3 className="font-semibold">{site}</h3>
+          <BarList
+            caption={`Rank of each canonical polar analog for ${site}`}
+            max={100}
+            reference={{ value: 50, label: "chance, 50%" }}
+            bars={Object.entries(row.analogs).map(([name, r]) => ({
+              label: name.replace(/,.*$/, ""),
+              value: r.top_pct,
+              display: `top ${r.top_pct}%`,
+              highlight: r.top_pct <= 1,
+              detail: `${name}: rank ${r.rank} of ${data.earth_tiles_ranked}${r.pushed_down ? "; pushed down by the environment checks" : ""}`,
+            }))}
+          />
+        </div>
+      ))}
+      <p className="mt-3 text-muted">
+        The Atacama comes back first, which is right. The McMurdo Dry Valleys — the most-cited
+        terrestrial analog for the lunar poles — rank at or below chance, and part of that is our own
+        doing: the tiles around them read as ice, so the environment checks that keep ice sheets out
+        of the results push them down too.
+      </p>
+      {shared.length > 0 && (
+        <p className="mt-2 text-xs text-muted">
+          {shared.map(([tile, names]) => `${names.join(" and ")} share tile ${tile}`).join("; ")}.
+          The Artemis regions are about 15 km across and our tiles{" "}
+          {data.tile_resolution_km ?? 85} km, so neighbouring regions cannot always be told apart.
+        </p>
+      )}
+    </>
+  );
+}
+
 export function Methodology() {
   const [validation, setValidation] = useState<ValidationFile | null | undefined>(undefined);
   useEffect(() => {
     api.validation().then(setValidation);
   }, []);
   const model = validation?.analog_model;
+  const crater = validation?.crater_retrieval;
+  const known = validation?.known_analog_ranking;
+  const polar = validation?.polar_analog_ranking;
 
   return (
     <article className="mx-auto max-w-2xl text-sm leading-relaxed">
@@ -149,6 +314,17 @@ export function Methodology() {
         ]}
       />
 
+      <h2 className="mt-6 font-semibold">Does retrieval find craters nobody told it about?</h2>
+      {validation === undefined ? (
+        <p className="mt-2 text-muted">Loading…</p>
+      ) : crater ? (
+        <Craters data={crater} />
+      ) : (
+        <p className="mt-2 text-muted">
+          Not exported yet. Run <code>scripts/05_validate.py</code>, then <code>scripts/03_export.py</code>.
+        </p>
+      )}
+
       <h2 className="mt-6 font-semibold">Validation: can it find analogs we already know?</h2>
       {validation === undefined ? (
         <p className="mt-2 text-muted">Loading…</p>
@@ -157,6 +333,27 @@ export function Methodology() {
       ) : (
         <p className="mt-2 text-muted">
           Not exported yet. Run <code>scripts/04_train.py</code>, then <code>scripts/03_export.py</code>.
+        </p>
+      )}
+
+      <h2 className="mt-6 font-semibold">Where the known analogs rank for their role</h2>
+      {validation === undefined ? (
+        <p className="mt-2 text-muted">Loading…</p>
+      ) : known ? (
+        <KnownAnalogs data={known} />
+      ) : (
+        <p className="mt-2 text-muted">
+          Not exported yet. Run <code>scripts/05_validate.py</code>, then <code>scripts/03_export.py</code>.
+        </p>
+      )}
+
+      <h2 className="mt-6 font-semibold">What we rank on, and what we only report</h2>
+      {polar ? (
+        <PolarAnalogs data={polar} />
+      ) : (
+        <p className="mt-2 text-muted">
+          Ranking uses terrain shape, slope and relief. Illumination, permanent shadow and Earth
+          visibility are reported on the card but do not affect the ranking.
         </p>
       )}
 

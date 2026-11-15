@@ -152,6 +152,26 @@ MOON_BASE_REGIONS = {
     "Shackleton rim (classic base concept)": (-89.67, 129.78),  # Shackleton crater
 }
 
+# Which lunar sites put a given analog role to the test (#16). To ask whether
+# a volcanic analog ranks "for its role", the query has to be a volcanic place
+# on the Moon; ranking it from a crater floor measures nothing.
+#   `moon` names come from MOON_SITES, `moon_polar` names from MOON_BASE_REGIONS.
+#   Roles absent here are not testable against the Moon, for the stated reason.
+MOON_ROLE_SITES = {
+    "impact": ("moon", ("Copernicus crater", "Tycho crater")),
+    "volcanic": ("moon", ("Aristarchus Plateau (pyroclastics)",
+                          "Gruithuisen Domes (silicic volcanism)",
+                          "Ina (irregular mare patch)")),
+    "lava_tube": ("moon", ("Marius Hills pit (lava-tube skylight)",
+                           "Mare Tranquillitatis pit (lava-tube skylight)")),
+    "polar": ("moon_polar", ("Shackleton rim (classic base concept)",
+                             "Haworth", "Malapert Massif")),
+}
+UNTESTABLE_ROLES = {
+    "arid": "the whole Moon is arid; no lunar site contrasts against it",
+    "aqueous": "a Mars role; nothing on the Moon is an aqueous site",
+}
+
 EARTH_PRESETS = {
     "Atacama Desert, Chile": (-24.1, -69.9),
     "Meteor Crater, Arizona": (35.03, -111.02),

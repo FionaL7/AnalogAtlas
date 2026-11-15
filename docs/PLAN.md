@@ -44,6 +44,7 @@ Search works end to end on real data: Moon, south pole and Earth indexes, the AP
 | Search API | Done | `api/`: `/search`, `/analogs`, `/twins` (with field tests and model score), `/tile` |
 | React frontend | Done | Atlas (site, map-click and text/picture search, report card with tile pictures and field tests), field guides, discoveries, traps, methodology with validation, data and credits ([#34](https://github.com/FionaL7/AnalogAtlas/issues/34)) |
 | Radar close study | Done | Mini-RF CPR for every lunar site (`radar.json`). 3 new pairs measured up close: radar on both bodies, 30 m slope, Sentinel-2 picture, full report card, page at `/close-study/:id`. Pairs and why: `analogatlas/closestudy.py` ([#19](https://github.com/FionaL7/AnalogAtlas/issues/19)) |
+| Validation | Done | Crater retrieval against the held-out Robbins catalog, and each known analog's rank for its role, both in `validation.json` and on the methodology page. `scripts/05_validate.py` ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)) |
 | Mars | Planned | Global `mars` index, 7 landing sites, report card, validation. Plan and tasks: [MARS-PLAN.md](MARS-PLAN.md) |
 
 **Verification.** Three text queries on the Moon index returned the expected terrain, and slopes measured independently from LOLA elevation data agree:
@@ -57,6 +58,20 @@ Search works end to end on real data: Moon, south pole and Earth indexes, the AP
 For comparison, the median slope across all Moon tiles is 3.9°, unchanged (slope comes from the DEM, not the chips). The ML results agree with independent elevation data, which is the first point to make on the slides.
 
 Rebuilt after [#27](https://github.com/FionaL7/AnalogAtlas/issues/27). "Rugged highlands" separates more sharply from the all-tile median than before, and "smooth plains" is identical. The crater query moved from above the median to below it — at 85 km a large crater is mostly its own flat floor, so this is plausible, but it is a change in behaviour and worth a second look if crater labels land ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)).
+
+**Crater labels landed, and they settle it ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)).** The Robbins catalog says the crater query really does return craters, despite its below-median slope:
+
+| Query | Largest crater in the top 6 (median) | Tiles with a crater ≥ 40 km |
+| --- | --- | --- |
+| "a large impact crater with a central peak" | **46.2 km** | 3 of 6 |
+| "smooth flat dark lava plains" | 4.2 km | 0 of 6 |
+| "rugged mountainous highlands" | 22.9 km | 2 of 6 |
+
+Across all Moon tiles the median largest crater is 28.7 km and 35% hold one ≥ 40 km. So the crater query lands well above the baseline and the lava-plains query far below it: the low slope was the crater floor, not a wrong answer. Note the crater query's tiles are mostly in the *low* crater-density third — a big crater's floor is smooth and holds few small ones — which is why [#16](https://github.com/FionaL7/AnalogAtlas/issues/16) measures density and big-crater presence as two separate tests.
+
+**Retrieval against held-out crater labels ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)).** Of the 10 nearest tiles by embedding, the share carrying the same crater-density third as the query: heavily cratered **69.5%**, smooth mare **63.2%**, middling 44.7%, against 33% by chance. A single big crater is weaker (47.8% against 34.7%). The ends of the scale are what the embeddings capture; the middle is barely better than chance, and the methodology page says so.
+
+**Where the known analogs rank for their role ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)).** Each analog ranked against all 11,699 Earth tiles from lunar sites sharing its role: median **top 4.06%**, 4 of 13 in the top 1%, 9 of 13 in the top 10%. The shipped scoring beats image-only for 12 of 13. Full table in `data/index/validation.json`.
 
 ## Challenge fit
 

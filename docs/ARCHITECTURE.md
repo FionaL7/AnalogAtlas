@@ -96,7 +96,7 @@ This directly answers a requirement: [REQUIREMENTS.md](REQUIREMENTS.md#4-things-
 | `/discoveries` | The close-study pairs first (#19), then the #29 model's top new candidates (not near any known site), with reasons, on a map; each links to the Atlas to find its lunar match |
 | `/close-study/:id` | One close-study pair (#19): why it was picked and why it is new, radar roughness on both bodies (CPR vs CPR where RCM exists, otherwise the Sentinel-1 indicator, labelled), slopes at 1.9 km and 30 m, a Sentinel-2 picture, the full report card |
 | `/traps` | Lookalike traps (#30): trap rate per lunar body, counts by reason, the strongest examples with image-only vs physics vs model ranks |
-| `/methodology` | Scoring, the LOLA slope validation, **hold-one-out validation** of the analog model from `validation.json`, limitations |
+| `/methodology` | Scoring, the LOLA slope validation, **crater retrieval** and **where known analogs rank for their role** (#16), **hold-one-out validation** of the analog model, **what we rank on versus what we only report** (#32) — all from `validation.json` — and limitations |
 | `/data` | Data sources, credits, and the AI-tool declaration ([R8](REQUIREMENTS.md#from-the-space-apps-rules) requires this) |
 
 Tile pictures are not shipped: `web/src/lib/chips.ts` rebuilds each 85 km chip in the browser from the same NASA Moon Trek and GIBS services the index was built from (GIBS WMS for Earth; Trek WMTS tiles positioned and clipped for the Moon and the south pole).
@@ -171,6 +171,7 @@ sequenceDiagram
 | `{body}_meta.parquet` | `scripts/02_features.py` | The grid columns plus features, below. One row per tile that has **both** layers on disk |
 | `{body}_img.npy` | `scripts/02_features.py` | `(N, 512)` **float16**, CLIP imagery embedding, L2-normalised |
 | `{body}_shade.npy` | `scripts/02_features.py` | `(N, 512)` **float16**, CLIP hillshade embedding: each tile is contrast-normalised (`embed.normalize_shade`), then averaged over four 90° rotations and re-normalised — so it encodes terrain *shape*, not sun azimuth or steepness |
+| `{body}_craters.parquet` | `scripts/05_validate.py` | Lunar bodies only. Robbins crater counts per tile: `n_ge_1km, n_ge_5km, n_ge_20km, largest_km, per_1e4km2`, in `_meta.parquet` row order. **Held out** — never a search feature or a training label, which is what makes it usable as ground truth ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)). Saved so other machines need not download the 227 MB catalog |
 
 Row order in the two `.npy` files matches `_meta.parquet` exactly. Nothing re-sorts them; `analog.BodyIndex` relies on this.
 
@@ -218,7 +219,7 @@ Gitignored. Built at deploy time from `data/index/` (the `data` release), then b
 | `tiles/{body}.json` | Per-tile geometry + features for the map layer: `tile_id, lat, lon, bbox, slope_med, relief_km`, and `known_analog` on Earth |
 | `analogs/{site_id}.json` | Precomputed top ~200 Earth analogs for one preset: `tile_id, score, visual_cos_scaled, physical, known_analog, model_score` (#29 percentile, `null` until trained) |
 | `twins/{site_id}__{tile_id}.json` | Precomputed report card for the pairs the demo opens, **climate baked in** so no NASA POWER call is needed at judging time. Also `field_tests` and `model_score`, as in `/twins` |
-| `validation.json` | The LOLA slope check, precision@k, and the percentile at which each known analog ranks for its known role |
+| `validation.json` | How the search scores against data that enters nothing else, copied from `data/index/`. Keys: `crater_retrieval` — precision@k over Robbins crater labels (density terciles and big craters), against the chance rate; `known_analog_ranking` — where each known analog ranks out of all Earth tiles, queried from lunar sites sharing its role (`sites.MOON_ROLE_SITES`), under the shipped scoring and image-only, with `moon_target: false` on Mars analogs that are reported but not scored; `polar_analog_ranking` — the canonical polar analogs per Artemis region ([#32](https://github.com/FionaL7/AnalogAtlas/issues/32)); `analog_model` — the #29 hold-one-out check. `05_validate.py` and `04_train.py` each merge their own keys, so neither clobbers the other |
 | `traps.json` | **Lookalike traps** (#30): Earth tiles an image-only AI would pick (top hillshade similarity) that fail a physics check. `stats`: per lunar body, `trap_rate` = share of the top-20 lookalikes that are traps, plus counts per reason. `traps`: the strongest, one per Earth tile. `by_site`: traps per preset site. Each trap has `visual_rank` (image-only), `physics_rank` (where our search, cross_body, puts it; it pushes ice, plants and water down, see #33), `model_score_pct` (#29 model, environment-aware), and `breakers` with a plain-language `reason` (ice, vegetation, water, wet climate, slope, relief). Built by `analogatlas/traps.py` |
 | `candidates.json` | `{moon, mars, all}`: the #29 model's top new candidates, copied from `data/index/candidates_*.json` (`tile_id, lat, lon, score_pct, why, slope_med, barren_frac, precip_mm, access_min`) |
 | `radar.json` | Mini-RF CPR per lunar site (#17), keyed by site id: `cpr_median, cpr_p90, coverage, n_pixels, box_half_km, source`. From `data/index/moon_site_cpr.json` |
@@ -300,12 +301,17 @@ analogatlas/     search core + pipeline library (existing)
   rasters.py       PDS3 IMG reader (+ ETOPO offline fallback); per-tile slope, relief, rock abundance, temperature
   embed.py         CLIP image/text embeddings; rotation-averaged hillshades; prompt ensembling
   analog.py        search, cross-body matching, NASA POWER lookup, report card  ← what the API wraps
-  sites.py         known Earth analogs (known/new tagging) + Moon/Earth presets
+  sites.py         known Earth analogs (known/new tagging) + Moon/Earth presets; role → lunar query sites
   portfolio.py     fewest Earth sites covering every dimension of a lunar target (#31)
+  closestudy.py    the close-study pairs and why each one is new (#19)
+  craters.py       Robbins crater labels per tile — validation ground truth only, never a feature
 scripts/
   01_tiles.py      step 1: grids + tile download
   02_features.py   step 2: features + embeddings → data/index/
   03_export.py     step 3: static export → web/public/data/   (to write)
+  04_train.py      step 4: analog model, hold-one-out, new candidates (#29)
+  04_radar.py      radar roughness: Mini-RF download, per-site CPR, RCM search (#17, #18)
+  05_validate.py   step 5: crater retrieval + known-analog ranking → validation.json (#16)
   05_portfolio_figure.py  slide figure docs/figures/portfolio.png (#31)
 api/               FastAPI — to write
   main.py            app factory; loads both BodyIndex at startup

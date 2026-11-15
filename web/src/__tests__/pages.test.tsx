@@ -1,7 +1,7 @@
 /** The pages that read the static export: traps, discoveries, validation,
  * field guides, data. Each must render real numbers when the file exists and
  * say so plainly when it does not. */
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -46,6 +46,51 @@ const VALIDATION = {
         },
         per_site: [{ site: "Atacama", top_pct: 0 }],
         weights: [{ feature: "terrain shape (CLIP)", weight: 6.8 }],
+      },
+    },
+  },
+  // #16: crater retrieval and known-analog ranking from scripts/05_validate.py
+  crater_retrieval: {
+    note: "Robbins (2019) crater labels", similarity: "w_shade=0.6", tiles: 5376,
+    density_class: {
+      definition: "tercile of the count of craters >= 1 km",
+      overall: { n_queries: 5376, random_baseline: 0.3333, p_at_10: 0.5913 },
+      by_class: {
+        smooth: { n_queries: 1792, random_baseline: 0.3333, p_at_10: 0.632 },
+        middling: { n_queries: 1783, random_baseline: 0.3317, p_at_10: 0.447 },
+        "heavily cratered": { n_queries: 1801, random_baseline: 0.335, p_at_10: 0.695 },
+      },
+    },
+    big_crater: { definition: "a crater >= 40 km", n_queries: 1864, random_baseline: 0.3467, p_at_10: 0.478 },
+  },
+  known_analog_ranking: {
+    note: "ranked from lunar sites sharing its role", earth_tiles_ranked: 11699,
+    top_pct_meaning: "% of Earth tiles scoring higher",
+    summary: { n: 13, in_top_1pct: 4, in_top_5pct: 7, in_top_10pct: 9, in_top_25pct: 11, median_top_pct: 4.06 },
+    sites: [
+      { site: "Craters of the Moon, Idaho, USA", roles: ["volcanic"], tested_roles: ["volcanic"],
+        moon_target: true, earth_tiles: 2,
+        shipped: { rank: 4, top_pct: 0.03, role: "volcanic", query: "Gruithuisen Domes", pushed_down: false },
+        image_only: { rank: 33, top_pct: 0.28, role: "volcanic", query: "Gruithuisen Domes", pushed_down: false } },
+      { site: "McMurdo Dry Valleys, Antarctica", roles: ["polar", "arid"], tested_roles: ["polar"],
+        moon_target: false, earth_tiles: 1,
+        shipped: { rank: 7533, top_pct: 64.38, role: "polar", query: "Shackleton rim", pushed_down: true } },
+    ],
+    skipped_sites: { "Ries Crater, Germany": "process analog" },
+  },
+  polar_analog_ranking: {
+    note: "#32: the polar dimensions report but do not rank", earth_tiles_ranked: 11699,
+    tile_resolution_km: 85,
+    query_sites_sharing_a_tile: { moonsp_5_6: ["Haworth", "Malapert Massif"] },
+    by_query_site: {
+      "Shackleton rim (classic base concept)": {
+        query_tile: "moonsp_5_5",
+        analogs: {
+          "Atacama Desert (Yungay), Chile": { rank: 22, top_pct: 0.18, pushed_down: false,
+                                              roles: ["arid"], target: ["mars", "moon"] },
+          "McMurdo Dry Valleys, Antarctica": { rank: 7533, top_pct: 64.38, pushed_down: true,
+                                               roles: ["polar", "arid"], target: ["mars"] },
+        },
       },
     },
   },
@@ -181,6 +226,45 @@ describe("pages from the static export", () => {
     expect(screen.getByRole("row", { name: /Image similarity only.*top 22.5%/ })).toBeInTheDocument();
     expect(screen.getByText("terrain shape (CLIP)")).toBeInTheDocument();
     expect(screen.getByText(/What the numbers are not/)).toBeInTheDocument();
+  });
+
+  it("Methodology: crater retrieval beats chance, and the weak cases are stated", async () => {
+    serve(FILES);
+    at("/methodology");
+    expect(await screen.findByRole("row", { name: /Heavily cratered.*69.5%/ })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Smooth \(mare\).*63.2%/ })).toBeInTheDocument();
+    // the middling third is barely better than chance; the page must not bury it
+    expect(screen.getByRole("row", { name: /Middling.*44.7%/ })).toBeInTheDocument();
+    expect(screen.getByText(/47.8% versus 34.7% chance/)).toBeInTheDocument();
+  });
+
+  it("Methodology: known analogs ranked for their role, Mars ones not scored", async () => {
+    serve(FILES);
+    at("/methodology");
+    expect(await screen.findByText(/top 4.06%/, { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Craters of the Moon.*top 0.03%/ })).toBeInTheDocument();
+    expect(screen.getByText(/ranked for information only \(1\)/)).toBeInTheDocument();
+  });
+
+  it("Methodology: says which dimensions rank, and that McMurdo is pushed down (#32)", async () => {
+    serve(FILES);
+    at("/methodology");
+    expect(await screen.findByText(/none of\s+them enter the ranking/)).toBeInTheDocument();
+    // McMurdo appears in the Mars list too, so scope to the Artemis region's block
+    const region = screen.getByRole("heading", { name: "Shackleton rim (classic base concept)" });
+    expect(within(region.parentElement!).getByRole("row", { name: /McMurdo Dry Valleys.*top 64.38%/ }))
+      .toBeInTheDocument();
+    expect(screen.getByText(/Haworth and Malapert Massif share tile moonsp_5_6/))
+      .toBeInTheDocument();
+  });
+
+  it("Methodology: the #16 sections say so when validation.json lacks them", async () => {
+    serve({ ...FILES, "/data/validation.json": { analog_model: VALIDATION.analog_model } });
+    at("/methodology");
+    expect(await screen.findByText(/top 9.5%/, { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getAllByText(/05_validate.py/).length).toBe(2);
+    // with no polar key the page still states what ranks and what only reports
+    expect(screen.getByText(/do not affect the ranking/)).toBeInTheDocument();
   });
 
   it("Discoveries: candidates with reasons and a link into the Atlas", async () => {

@@ -226,6 +226,78 @@ export interface ModelTarget {
   weights?: { feature: string; weight: number }[];
 }
 
+/** One precision@k group: the score per k, plus the chance rate to beat (#16). */
+export interface PrecisionGroup {
+  definition?: string;
+  n_queries: number;
+  random_baseline: number;
+  /** p_at_5, p_at_10, p_at_20 … null when the group has no queries. */
+  [k: `p_at_${number}`]: number | null | undefined;
+}
+
+export interface CraterRetrieval {
+  note: string;
+  similarity: string;
+  tiles: number;
+  density_class: {
+    definition: string;
+    overall: PrecisionGroup;
+    by_class: Record<"smooth" | "middling" | "heavily cratered", PrecisionGroup>;
+  };
+  big_crater: PrecisionGroup;
+}
+
+export interface AnalogRank {
+  rank: number;
+  top_pct: number;
+  role: string;
+  query: string;
+  pushed_down: boolean;
+}
+
+export interface KnownAnalogRanking {
+  note: string;
+  earth_tiles_ranked: number;
+  top_pct_meaning: string;
+  summary: {
+    n: number;
+    median_top_pct: number | null;
+    in_top_1pct: number;
+    in_top_5pct: number;
+    in_top_10pct: number;
+    in_top_25pct: number;
+  };
+  sites: {
+    site: string;
+    roles: string[];
+    tested_roles: string[];
+    /** False for Mars analogs: ranked for information, never scored. */
+    moon_target: boolean;
+    earth_tiles: number;
+    shipped?: AnalogRank;
+    image_only?: AnalogRank;
+  }[];
+  skipped_sites: Record<string, string>;
+}
+
+/** #32: where the canonical polar analogs land for each Artemis region. */
+export interface PolarAnalogRanking {
+  note: string;
+  earth_tiles_ranked?: number;
+  tile_resolution_km?: number;
+  query_sites_sharing_a_tile?: Record<string, string[]>;
+  by_query_site?: Record<string, {
+    query_tile: string;
+    analogs: Record<string, {
+      rank: number;
+      top_pct: number;
+      pushed_down: boolean;
+      roles: string[];
+      target: string[];
+    }>;
+  }>;
+}
+
 export interface ValidationFile {
   analog_model?: {
     method: string;
@@ -234,6 +306,9 @@ export interface ValidationFile {
     targets: Partial<Record<"all" | "moon" | "mars", ModelTarget>>;
     skipped_sites?: Record<string, string>;
   };
+  crater_retrieval?: CraterRetrieval;
+  known_analog_ranking?: KnownAnalogRanking;
+  polar_analog_ranking?: PolarAnalogRanking;
 }
 
 /** Static export: portfolio/{site_id}.json (#31). The fewest Earth sites
