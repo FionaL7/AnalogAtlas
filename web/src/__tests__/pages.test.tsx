@@ -276,6 +276,34 @@ describe("pages from the static export", () => {
       .toHaveAttribute("href", "/?src=earth:-26.500,-67.700");
   });
 
+  it("Discoveries: a named candidate leads with its place, coordinates second", async () => {
+    serve({ ...FILES, "/data/candidates.json": { moon: [{
+      tile_id: "earth_-26.50_-67.70", lat: -26.5, lon: -67.7, score_pct: 100, why: ["low greenness"],
+      access_min: 350, place: "Catamarca, Argentina" }] } });
+    at("/discoveries");
+    expect(await screen.findByText("Catamarca, Argentina")).toBeInTheDocument();
+    expect(screen.getByText("26.50°S 67.70°W")).toBeInTheDocument();
+  });
+
+  it("Atlas: a bare / opens on the worked example with its report card", async () => {
+    const site = { id: "de-gerlache-rim-2", body: "moon_polar", name: "de Gerlache Rim 2",
+                   lat: -88.6, lon: -68.0, is_base_region: true, in_index: true };
+    const hit = { ...ANALOGS.results[0], tile_id: "earth_-26.50_-68.82", lat: -26.5, lon: -68.82,
+                  place: "Atacama Region, Chile" };
+    serve({
+      ...FILES,
+      "/data/sites.json": [...SITES, site],
+      "/data/analogs/de-gerlache-rim-2.json": { ...ANALOGS, site_id: site.id, results: [hit] },
+      "/data/twins/de-gerlache-rim-2__earth_-26.50_-68.82.json":
+        { ...CARD, earth: { tile_id: hit.tile_id, lat: -26.5, lon: -68.82, place: hit.place } },
+    });
+    at("/");
+    expect(await screen.findByText(/Example:/)).toBeInTheDocument();
+    expect(await screen.findByText("Report card")).toBeInTheDocument();
+    expect(screen.getAllByText("Atacama Region, Chile").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Pick another site" })).toBeInTheDocument();
+  });
+
   it("Field guide: polar facts, Mini-RF radar, a candidate's field tests, traps", async () => {
     serve(FILES);
     at("/sites/haworth");

@@ -6,8 +6,12 @@
  * Navigation state lives in the URL (?site= or ?src=, &tile=, &new=, &w=) so
  * any view can be shared or linked from the slides (§6). Search results are
  * transient and stay in component state.
+ *
+ * A bare `/` opens on a worked example (EXAMPLE) instead of an empty page, so
+ * a first visit shows a result and a report card with no clicks. The example
+ * is never written to the URL: any change starts from it and becomes a link.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { TrapCard } from "../components/TrapCard";
@@ -26,6 +30,17 @@ import {
 } from "../lib/types";
 
 const DEFAULT_W_PHYS = 0.3;
+
+/** The landing example: the #19 close-study pair whose physical match is
+ *  strongest (slope and relief both hold), so the first thing a visitor sees
+ *  is a fair one. Static export only: in mock mode the site is absent and
+ *  the page opens empty as before. */
+const EXAMPLE = {
+  site: "de-gerlache-rim-2",
+  tile: "earth_-26.50_-68.82",
+  earthName: "Puna de Atacama",
+  closeStudy: "de-gerlache-puna",
+} as const;
 
 /** Where each index has data, so a click outside it is refused, not clamped. */
 const IN_INDEX: Record<Body, (lat: number) => boolean> = {
@@ -69,7 +84,15 @@ const RANK_MODES = [
 ] as const;
 
 export function Atlas() {
-  const [params, setParams] = useSearchParams();
+  const [urlParams, setParams] = useSearchParams();
+  const [sites, setSites] = useState<Site[]>([]);
+  const isExample = urlParams.toString() === "" && sites.some((s) => s.id === EXAMPLE.site);
+  // Everything below reads `params`: the URL, or the example when the URL is bare.
+  const params = useMemo(
+    () => (isExample ? new URLSearchParams({ site: EXAMPLE.site, tile: EXAMPLE.tile }) : urlParams),
+    [isExample, urlParams],
+  );
+  const siteSelect = useRef<HTMLButtonElement>(null);
   const siteId = params.get("site");
   const tileId = params.get("tile");
   const newOnly = params.get("new") === "1";
@@ -79,7 +102,6 @@ export function Atlas() {
   const worldParam = params.get("lunar");
   const lunarParam: SourceBody = isSource(worldParam) ? worldParam : "moon";
 
-  const [sites, setSites] = useState<Site[]>([]);
   const [analogs, setAnalogs] = useState<AnalogsResponse | null>(null);
   /** The request `analogs` answers, so a stale list is never auto-selected from. */
   const [analogsKey, setAnalogsKey] = useState<string | null>(null);
@@ -275,7 +297,7 @@ export function Atlas() {
         markers: hits.map<MapMarker>((h) => ({
           tile_id: h.tile_id, lat: h.lat, lon: h.lon,
           weight: h.visual_cos_scaled, isNew: h.known_analog === null,
-          label: h.known_analog ?? h.tile_id,
+          label: h.known_analog ?? h.place ?? h.tile_id,
         })),
         selected: tileId,
         onSelect: (id: string) => update({ tile: id }),
@@ -290,9 +312,29 @@ export function Atlas() {
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_26rem]">
       <div className="flex min-w-0 flex-col gap-4">
+        <header>
+          <h1 className="text-lg font-semibold">
+            Find the places on Earth that best stand in for any site on the Moon or Mars.
+          </h1>
+          {isExample && site && (
+            <p className="mt-1 text-sm text-muted">
+              Example: <span className="text-ink">{site.name}</span>, a sunlit rim near the lunar
+              south pole, and its strongest new Earth match, the{" "}
+              <Link to={`/close-study/${EXAMPLE.closeStudy}`} className="text-holds underline">
+                {EXAMPLE.earthName}
+              </Link>.{" "}
+              <button type="button" className="text-holds underline"
+                      onClick={() => { siteSelect.current?.focus(); siteSelect.current?.click(); }}>
+                Pick another site
+              </button>{" "}
+              or click anywhere on either map.
+            </p>
+          )}
+        </header>
         <div className="rounded-lg border border-edge bg-panel">
           <div className="flex flex-wrap items-start gap-x-6 gap-y-3 p-4">
             <SiteSelect
+              buttonRef={siteSelect}
               label="Target site"
               value={siteId ?? ""}
               placeholder={source && !site ? "Custom point (map click)" : "Pick a site…"}

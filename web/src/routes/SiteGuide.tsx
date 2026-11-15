@@ -97,7 +97,12 @@ function Candidates({ guide }: { guide: Guide }) {
         return (
           <li key={hit.tile_id} className="rounded-lg border border-edge bg-panel p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="font-semibold">#{i + 1} · {coords(hit.lat, hit.lon)}</h3>
+              <h3 className="font-semibold">
+                #{i + 1} · {hit.place ?? coords(hit.lat, hit.lon)}
+                {hit.place && (
+                  <span className="ml-2 text-xs font-normal tabular-nums text-muted">{coords(hit.lat, hit.lon)}</span>
+                )}
+              </h3>
               <Link to={`/?site=${site.id}&tile=${encodeURIComponent(hit.tile_id)}`}
                     className="text-xs text-holds underline">Open the full report card →</Link>
             </div>

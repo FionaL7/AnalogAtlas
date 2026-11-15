@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- AnalogAtlas: a globe with its graticule, and a small moon beside it.
+       Colours match the app's dark theme tokens (base, accent, holds). -->
+  <rect width="64" height="64" rx="14" fill="#0b0f18"/>
+  <g fill="none" stroke="#95b5d6" stroke-width="3">
+    <circle cx="28" cy="34" r="19"/>
+    <ellipse cx="28" cy="34" rx="8" ry="19"/>
+    <path d="M9 34h38M12 24h32M12 44h32"/>
+  </g>
+  <circle cx="51" cy="13" r="7" fill="#3fbf86"/>
+</svg>

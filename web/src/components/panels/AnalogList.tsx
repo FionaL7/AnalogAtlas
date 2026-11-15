@@ -41,7 +41,7 @@ export function AnalogList({ hits, body = "earth", selected, onSelect }: Props) 
                       className="w-12 shrink-0" />
             <span className="min-w-0 flex-1">
               <span className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">{coords(hit.lat, hit.lon)}</span>
+                <span className="font-medium">{hit.place ?? coords(hit.lat, hit.lon)}</span>
                 {hit.known_analog === null ? (
                   <span className="rounded bg-holds/20 px-1.5 py-0.5 text-xs text-holds">new</span>
                 ) : (
@@ -50,6 +50,9 @@ export function AnalogList({ hits, body = "earth", selected, onSelect }: Props) 
                   </span>
                 )}
               </span>
+              {hit.place && (
+                <span className="mt-1 block text-xs tabular-nums text-muted">{coords(hit.lat, hit.lon)}</span>
+              )}
               <span className="mt-1 block break-all font-mono text-xs text-muted">{hit.tile_id}</span>
             </span>
             <span className="shrink-0 text-right text-xs">

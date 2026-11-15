@@ -4,6 +4,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
+import { wrapLabel } from "../components/MatchRadar";
 import { ReportCard } from "../components/panels/ReportCard";
 import { mockTwins } from "../lib/mocks";
 import type { TwinsResponse } from "../lib/types";
@@ -31,5 +32,21 @@ describe("verdict block", () => {
     delete data.verdict;
     card(data);
     expect(screen.queryByText(/transfer confidence/)).not.toBeInTheDocument();
+  });
+});
+
+describe("match radar", () => {
+  it("draws one spoke per compared dimension, each with its number", () => {
+    const data = mockTwins("moonsp_2_3", "earth_-77.50_+162.00");
+    card(data);
+    const chart = screen.getByRole("img", { name: /Match by dimension/ });
+    const compared = data.breakdown.filter((r) => r.kind === "compare" && r.match !== null);
+    for (const r of compared) expect(chart.getAttribute("aria-label")).toContain(r.dimension);
+  });
+
+  it("wraps long labels onto two balanced lines", () => {
+    expect(wrapLabel("Median slope")).toEqual(["Median slope"]);
+    expect(wrapLabel("Surface temperature swing")).toEqual(["Surface", "temperature swing"]);
+    expect(wrapLabel("Longest continuous darkness")).toEqual(["Longest continuous", "darkness"]);
   });
 });

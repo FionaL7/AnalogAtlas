@@ -1,6 +1,6 @@
 /** Grouped dropdown that always opens below its button.
  *  A native <select> can't do this: macOS draws its menu over the control. */
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type Ref } from "react";
 
 export type SiteOption = { value: string; label: string };
 export type SiteGroup = { label: string; options: SiteOption[] };
@@ -11,9 +11,11 @@ type Props = {
   placeholder: string;
   groups: SiteGroup[];
   onChange: (value: string) => void;
+  /** The combobox button, so a caller can open the list ("Pick another site"). */
+  buttonRef?: Ref<HTMLButtonElement>;
 };
 
-export function SiteSelect({ label, value, placeholder, groups, onChange }: Props) {
+export function SiteSelect({ label, value, placeholder, groups, onChange, buttonRef }: Props) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -88,6 +90,7 @@ export function SiteSelect({ label, value, placeholder, groups, onChange }: Prop
         {label}
       </span>
       <button
+        ref={buttonRef}
         type="button"
         role="combobox"
         aria-labelledby={`${id}-label`}
