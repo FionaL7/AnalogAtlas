@@ -140,6 +140,37 @@ describe("pages from the static export", () => {
     expect(screen.getByText(/Lookalikes to avoid/)).toBeInTheDocument();
   });
 
+  it("Field guide: portfolio of Earth sites, with Earth's limits said plainly", async () => {
+    const dim = (id: string, label: string, covered_by: string | null, earth_best_only = false) =>
+      ({ id, label, note: "", moon: "-", threshold: 0.6, earth_best: 0.64, earth_best_only, covered_by });
+    serve({ ...FILES, "/data/portfolio/haworth.json": {
+      site_id: "haworth", site_name: "Haworth", body: "moon_polar",
+      src_tile: { tile_id: "moonsp_2_3", lat: -86, lon: -1.7 }, polar: true,
+      dimensions: [dim("dryness", "Dryness", "earth_a"), dim("sun_angle", "Low sun angle", "earth_b", true),
+                   dim("access", "Access", "earth_a")],
+      sites: [
+        { order: 1, tile_id: "earth_a", lat: -26.5, lon: -68.82, known_analog: null,
+          covers: ["dryness", "access"], adds: ["dryness", "access"], scores: {} },
+        { order: 2, tile_id: "earth_b", lat: 81.5, lon: -88.67, known_analog: "Haughton Crater",
+          covers: ["sun_angle"], adds: ["sun_angle"], scores: {} },
+      ],
+      uncovered: [], best_single_site: { tile_id: "earth_a", covers: 2 }, candidates: 100,
+    } });
+    at("/sites/haworth");
+    expect(await screen.findByText("Smallest set of Earth sites")).toBeInTheDocument();
+    expect(screen.getByText(/the best single site covers only 2/)).toBeInTheDocument();
+    expect(screen.getByText("Near Haughton Crater")).toBeInTheDocument();
+    expect(screen.getByText(/closest Earth gets \(64%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Practical, not likeness/)).toBeInTheDocument();
+  });
+
+  it("Field guide: no portfolio section when it is not exported", async () => {
+    serve(FILES);
+    at("/sites/haworth");
+    expect(await screen.findByRole("heading", { name: "Haworth" })).toBeInTheDocument();
+    expect(screen.queryByText("Smallest set of Earth sites")).not.toBeInTheDocument();
+  });
+
   it("Field guides index links to each site", async () => {
     serve(FILES);
     const user = userEvent.setup();

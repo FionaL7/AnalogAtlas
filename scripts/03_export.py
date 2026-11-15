@@ -19,6 +19,7 @@ Reads data/index/ and writes, under --out:
     traps.json                     lookalike traps (#30)
     candidates.json                the #29 model's top new candidates, per target
     radar.json                     Mini-RF CPR per lunar site (#17), keyed by site id
+    portfolio/{site_id}.json       fewest Earth sites covering every dimension (#31)
 """
 from __future__ import annotations
 
@@ -34,7 +35,7 @@ import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from analogatlas import analog, config as C, fieldtest, tiles, traps  # noqa: E402
+from analogatlas import analog, config as C, fieldtest, portfolio, tiles, traps  # noqa: E402
 from analogatlas.sites import (  # noqa: E402
     EARTH_PRESETS, KNOWN_EARTH_ANALOGS, MOON_BASE_REGIONS, MOON_SITES,
 )
@@ -298,6 +299,24 @@ def export_traps(sources: list[tuple[str, analog.BodyIndex]], earth: analog.Body
     return write_json(out / "traps.json", dict(stats=stats, traps=traps.pick(found), by_site=by_site))
 
 
+def export_portfolios(sites: list[dict], earth: analog.BodyIndex, by_body: dict,
+                      out: Path) -> list[str]:
+    """portfolio/{site_id}.json (#31): the fewest Earth sites that together
+    cover every dimension of one lunar target. Lunar targets only."""
+    written = []
+    for site in sites:
+        src = by_body.get(site["body"])
+        if site["body"] == "earth" or not site.get("in_index") or src is None:
+            continue
+        i = src.nearest_tile(site["lat"], site["lon"])
+        payload = portfolio.build_portfolio(src, i, earth)
+        write_json(out / "portfolio" / f"{site['id']}.json",
+                   dict(site_id=site["id"], site_name=site["name"], body=site["body"], **payload))
+        written.append(site["id"])
+    print(f"  portfolios: {len(written)} lunar targets")
+    return written
+
+
 def export_candidates(out: Path) -> int | None:
     """candidates.json: {target: [...]} from data/index/candidates_{target}.json (#29)."""
     payload = {}
@@ -393,6 +412,7 @@ def main() -> int:
 
     export_traps([("moon", moon)] + ([("moon_polar", polar)] if polar else []),
                  earth, sites, by_body, out)
+    export_portfolios(sites, earth, by_body, out)
 
     export_candidates(out)
     export_radar(sites, out)

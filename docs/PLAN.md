@@ -40,6 +40,7 @@ Search works end to end on real data: Moon, south pole and Earth indexes, the AP
 | Earth side | Done | 11,699 land tiles. Hillshade + slope/relief from Copernicus DEM via `analogatlas/earth_ee.py` (Earth Engine, `EE_PROJECT` in `.env`); imagery from GIBS Blue Marble |
 | Analog model | Done | PU learning on known sites, hold-one-out validation, new candidates ([#29](https://github.com/FionaL7/AnalogAtlas/issues/29)) |
 | Lookalike traps | Done | `analogatlas/traps.py`, exported as `traps.json` ([#30](https://github.com/FionaL7/AnalogAtlas/issues/30)) |
+| Analog portfolio | Done | `analogatlas/portfolio.py`, exported as `portfolio/{site_id}.json` for all 21 lunar targets; each fully covered by 2–4 Earth sites ([#31](https://github.com/FionaL7/AnalogAtlas/issues/31)). Shown on each field guide; slide figure `docs/figures/portfolio.png` (`scripts/05_portfolio_figure.py`). **If #32 changes scoring, re-run `03_export.py` and `05_portfolio_figure.py`** |
 | Search API | Done | `api/`: `/search`, `/analogs`, `/twins` (with field tests and model score), `/tile` |
 | React frontend | Done | Atlas (site, map-click and text/picture search, report card with tile pictures and field tests), field guides, discoveries, traps, methodology with validation, data and credits ([#34](https://github.com/FionaL7/AnalogAtlas/issues/34)) |
 | Radar close study | Moon done | Mini-RF CPR for every lunar site (`radar.json`). Earth RCM/Sentinel-1 side pending ([#19](https://github.com/FionaL7/AnalogAtlas/issues/19)) |

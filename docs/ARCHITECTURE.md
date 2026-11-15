@@ -221,6 +221,7 @@ Gitignored. Built at deploy time from `data/index/` (the `data` release), then b
 | `traps.json` | **Lookalike traps** (#30): Earth tiles an image-only AI would pick (top hillshade similarity) that fail a physics check. `stats`: per lunar body, `trap_rate` = share of the top-20 lookalikes that are traps, plus counts per reason. `traps`: the strongest, one per Earth tile. `by_site`: traps per preset site. Each trap has `visual_rank` (image-only), `physics_rank` (where our search, cross_body, puts it; it pushes ice, plants and water down, see #33), `model_score_pct` (#29 model, environment-aware), and `breakers` with a plain-language `reason` (ice, vegetation, water, wet climate, slope, relief). Built by `analogatlas/traps.py` |
 | `candidates.json` | `{moon, mars, all}`: the #29 model's top new candidates, copied from `data/index/candidates_*.json` (`tile_id, lat, lon, score_pct, why, slope_med, barren_frac, precip_mm, access_min`) |
 | `radar.json` | Mini-RF CPR per lunar site (#17), keyed by site id: `cpr_median, cpr_p90, coverage, n_pixels, box_half_km, source`. From `data/index/moon_site_cpr.json` |
+| `portfolio/{site_id}.json` | **Analog portfolio** (#31), one per lunar target: the fewest Earth sites that together cover 7 dimensions (terrain shape, slope and relief, thermal swing, dryness, low sun angle, bare rock (frozen at the pole), access). `dimensions`: `threshold`, `earth_best`, `covered_by`, and `earth_best_only` when no Earth site reaches the bar, so the best Earth can do counts. `sites`: picks in order, each with `covers`, `adds` and all 7 `scores`. `best_single_site`: how many dimensions one site covers alone. Ice, plant and water tiles are never picked. Built by `analogatlas/portfolio.py` (greedy set cover) |
 
 `known_analog` comes from `analog.known_analog_name(lat, lon)` (150 km radius). Tiles where it's `null` are the **new** candidates — what the challenge actually asks for, so the UI leads with them.
 
@@ -298,10 +299,12 @@ analogatlas/     search core + pipeline library (existing)
   embed.py         CLIP image/text embeddings; rotation-averaged hillshades; prompt ensembling
   analog.py        search, cross-body matching, NASA POWER lookup, report card  ← what the API wraps
   sites.py         known Earth analogs (known/new tagging) + Moon/Earth presets
+  portfolio.py     fewest Earth sites covering every dimension of a lunar target (#31)
 scripts/
   01_tiles.py      step 1: grids + tile download
   02_features.py   step 2: features + embeddings → data/index/
   03_export.py     step 3: static export → web/public/data/   (to write)
+  05_portfolio_figure.py  slide figure docs/figures/portfolio.png (#31)
 api/               FastAPI — to write
   main.py            app factory; loads both BodyIndex at startup
   routers/           search.py, analogs.py, twins.py, tile.py

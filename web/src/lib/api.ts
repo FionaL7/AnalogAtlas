@@ -11,6 +11,7 @@ import type {
   AnalogsResponse,
   Body,
   CandidatesFile,
+  PortfolioFile,
   RadarFile,
   SearchRequest,
   SearchResponse,
@@ -124,6 +125,8 @@ export const traps = () => once<TrapsFile>("/data/traps.json");
 export const candidates = () => once<CandidatesFile>("/data/candidates.json");
 /** Mini-RF radar roughness per lunar site (#17). */
 export const radar = () => once<RadarFile>("/data/radar.json");
+/** The analog portfolio for one lunar site (#31). Null if not exported. */
+export const portfolio = (siteId: string) => once<PortfolioFile>(`/data/portfolio/${siteId}.json`);
 /** Hold-one-out validation of the analog model (#29). */
 export const validation = () => once<ValidationFile>("/data/validation.json");
 
