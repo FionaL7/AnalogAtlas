@@ -16,9 +16,10 @@ import { Hint } from "../components/Hint";
 import { AnalogList } from "../components/panels/AnalogList";
 import { ReportCard } from "../components/panels/ReportCard";
 import { SearchBox, type SearchInput } from "../components/panels/SearchBox";
+import { SiteSelect } from "../components/panels/SiteSelect";
 import { SearchResults } from "../components/panels/SearchResults";
 import * as api from "../lib/api";
-import { coords } from "../lib/format";
+import { coords, newFirst } from "../lib/format";
 import {
   BODY_NAME, SOURCE_BODIES, type AnalogHit, type AnalogsResponse, type Body, type SearchHit,
   type Site, type SourceBody, type TileCell, type Trap, type TwinsResponse,
@@ -59,6 +60,14 @@ function parseSrc(v: string | null): { body: Body; lat: number; lon: number } | 
   return m ? { body: m[1] as Body, lat: Number(m[2]), lon: Number(m[3]) } : null;
 }
 
+/** What the candidates are ranked by. `w` is the weight on measured slope and relief. */
+const RANK_MODES = [
+  { label: "Looks", w: 0, about: "Ranks only by how alike the terrain looks in orbital images." },
+  { label: "Balanced", w: DEFAULT_W_PHYS,
+    about: "Looks first, checked against slope and relief. Best for most uses." },
+  { label: "Measurements", w: 1, about: "Ranks only by measured slope and relief, ignoring how it looks." },
+] as const;
+
 export function Atlas() {
   const [params, setParams] = useSearchParams();
   const siteId = params.get("site");
@@ -72,6 +81,8 @@ export function Atlas() {
 
   const [sites, setSites] = useState<Site[]>([]);
   const [analogs, setAnalogs] = useState<AnalogsResponse | null>(null);
+  /** The request `analogs` answers, so a stale list is never auto-selected from. */
+  const [analogsKey, setAnalogsKey] = useState<string | null>(null);
   const [card, setCard] = useState<TwinsResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,13 +129,17 @@ export function Atlas() {
     : search && search.body !== "earth" ? search.body
     : lunarParam;
 
-  const update = (next: Record<string, string | null>) => {
+  const requestKey = source
+    ? `${source.body}|${source.lat}|${source.lon}|${newOnly}|${wPhys}|${earthDst}`
+    : null;
+
+  const update = (next: Record<string, string | null>, opts?: { replace?: boolean }) => {
     const merged = new URLSearchParams(params);
     for (const [k, v] of Object.entries(next)) {
       if (v === null) merged.delete(k);
       else merged.set(k, v);
     }
-    setParams(merged);
+    setParams(merged, opts);
   };
 
   // ---- analogs for the current source -------------------------------------
@@ -135,6 +150,7 @@ export function Atlas() {
     }
     setBusy(true);
     setError(null);
+    const key = requestKey;
     const req = {
       src_body: source.body, lat: source.lat, lon: source.lon,
       k: 12, new_only: newOnly, w_phys: wPhys,
@@ -145,7 +161,10 @@ export function Atlas() {
     const staticId = source.site && wPhys === DEFAULT_W_PHYS ? source.site.id : undefined;
     api
       .analogs(req, staticId)
-      .then(setAnalogs)
+      .then((res) => {
+        setAnalogs(res);
+        setAnalogsKey(key);
+      })
       .catch((e: Error) => {
         setAnalogs(null);
         setError(e.message);
@@ -180,6 +199,17 @@ export function Atlas() {
   const hits: AnalogHit[] = (analogs?.results ?? [])
     .filter((h) => !newOnly || h.known_analog === null)
     .slice(0, 12);
+
+  // Open on the best candidate, so the report card is there without a click.
+  // `replace`, so Back leaves the page instead of bouncing off this redirect.
+  // A tile already in the link, and still in the list, is left alone.
+  const topTile = newFirst(hits)[0]?.tile_id ?? null;
+  const tileShown = tileId !== null && hits.some((h) => h.tile_id === tileId);
+  useEffect(() => {
+    if (busy || !analogs || analogsKey !== requestKey || !topTile || tileShown) return;
+    update({ tile: topTile }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, analogs, analogsKey, requestKey, topTile, tileShown]);
 
   const startFrom = (body: Body, lat: number, lon: number) => {
     if (!IN_INDEX[body](lat)) {
@@ -261,89 +291,69 @@ export function Atlas() {
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_26rem]">
       <div className="flex min-w-0 flex-col gap-4">
         <div className="rounded-lg border border-edge bg-panel">
-          <div className="flex flex-wrap items-end gap-3 p-4">
-            <span className="flex flex-col gap-1">
-              <label htmlFor="site" className="text-xs uppercase tracking-wide text-muted">
-                Target site
-              </label>
-              <select
-                id="site"
-                value={siteId ?? ""}
-                onChange={(e) => {
-                  setSearch(null);
-                  update({ site: e.target.value || null, tile: null, src: null });
-                }}
-                className="max-w-[18rem] rounded border border-edge bg-base px-3 py-2 text-sm"
-              >
-                <option value="">{source && !site ? "Custom point (map click)" : "Pick a site…"}</option>
-                <optgroup label="Moon base candidates (Artemis)">
-                  {sites.filter((s) => s.is_base_region).map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Other Moon sites">
-                  {sites.filter((s) => !s.is_base_region && (s.body === "moon" || s.body === "moon_polar")).map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Mars landing and exploration sites">
-                  {sites.filter((s) => s.body === "mars").map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Earth sites (find Moon or Mars terrain)">
-                  {sites.filter((s) => s.body === "earth").map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </optgroup>
-              </select>
-            </span>
-            <span className="flex flex-col py-1">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={newOnly}
-                  onChange={(e) => update({ new: e.target.checked ? "1" : null })}
-                />
-                New candidates only
-              </label>
-              <Hint className="max-w-[12rem]">Hides sites already used as analogs.</Hint>
-            </span>
-            <label className="flex flex-col gap-1 py-1 text-xs text-muted"
-                   title={api.isLive() ? undefined : "Needs the API: the static export is precomputed at 0.3"}>
-              <span>Look ↔ Measurements: <span className="tabular-nums text-ink">{wPhys.toFixed(1)}</span>
-                {!api.isLive() && " (needs the API)"}</span>
-              <input
-                type="range" min={0} max={1} step={0.1} value={wPhys}
-                disabled={!api.isLive()}
-                aria-label="Ranking weight: 0 ranks by look only, 1 by measured slope and relief only"
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  update({ w: v === DEFAULT_W_PHYS ? null : String(v), tile: null });
-                }}
-                className="w-36 disabled:opacity-40"
-              />
-              <Hint more="glossary" className="max-w-[12rem]">
-                0 = ranks by look only · 1 = by measured slope and relief only
+          <div className="flex flex-wrap items-start gap-x-6 gap-y-3 p-4">
+            <SiteSelect
+              label="Target site"
+              value={siteId ?? ""}
+              placeholder={source && !site ? "Custom point (map click)" : "Pick a site…"}
+              onChange={(v) => {
+                setSearch(null);
+                update({ site: v || null, tile: null, src: null });
+              }}
+              groups={[
+                { label: "Moon base candidates (Artemis)", filter: (s: Site) => s.is_base_region },
+                { label: "Other Moon sites", filter: (s: Site) => !s.is_base_region && (s.body === "moon" || s.body === "moon_polar") },
+                { label: "Mars landing and exploration sites", filter: (s: Site) => s.body === "mars" },
+                { label: "Earth sites (find Moon or Mars terrain)", filter: (s: Site) => s.body === "earth" },
+              ].map((g) => ({
+                label: g.label,
+                options: sites.filter(g.filter).map((s) => ({ value: s.id, label: s.name })),
+              }))}
+            />
+            <div className="flex max-w-full flex-col gap-1 text-xs text-muted"
+                 title={api.isLive() ? undefined : "Needs the API: the static export is precomputed at the Balanced setting"}>
+              <span id="rank-by" className="uppercase tracking-wide">Rank matches by</span>
+              <div role="radiogroup" aria-labelledby="rank-by"
+                   className="flex overflow-hidden rounded border border-edge text-sm">
+                {RANK_MODES.map((m) => {
+                  const on = wPhys === m.w;
+                  return (
+                    <button
+                      key={m.label}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      disabled={!api.isLive()}
+                      onClick={() => update({ w: m.w === DEFAULT_W_PHYS ? null : String(m.w), tile: null })}
+                      className={`border-l border-edge px-3 py-2 first:border-l-0 disabled:cursor-not-allowed ${
+                        on ? "bg-edge text-ink" : "bg-base text-muted enabled:hover:text-ink"
+                      } ${!api.isLive() && !on ? "opacity-40" : ""}`}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <Hint more="glossary" className="max-w-[22rem]">
+                {!api.isLive()
+                  ? "Showing Balanced. Needs the API to change."
+                  : RANK_MODES.find((m) => m.w === wPhys)?.about ?? "A custom mix from the link."}
               </Hint>
-            </label>
+            </div>
             {guideable && (
               <Link to={`/sites/${site.id}`} className="ml-auto self-center text-sm text-holds underline">
                 Field guide →
               </Link>
             )}
           </div>
-          {site?.blurb && <p className="px-4 pb-2 text-sm text-muted">{site.blurb}</p>}
+          {site?.blurb && <p className="px-4 pb-4 text-sm text-muted">{site.blurb}</p>}
           {source && !site && (
-            <p className="px-4 pb-2 text-sm text-muted">Searching from {source.label}.</p>
+            <p className="px-4 pb-4 text-sm text-muted">Searching from {source.label}.</p>
           )}
-          <p className="px-4 pb-4 text-xs text-muted">
-            Tip: click anywhere on either map to find analogs for that spot.
-          </p>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-muted">
-          Compare Earth with:
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+          <span className="text-sm text-ink">Compare Earth with:</span>
           {SOURCE_BODIES.map((b) => (
             <button
               key={b}
@@ -358,6 +368,9 @@ export function Atlas() {
             </button>
           ))}
           {notice && <span role="status" className="ml-2 text-breaks">{notice}</span>}
+          <span className="ml-auto text-[11px] text-muted">
+            Tip: click anywhere on either map to find analogs for that spot.
+          </span>
         </div>
 
         {/* Earth is always the left pane and the Moon or Mars always the right
@@ -370,9 +383,18 @@ export function Atlas() {
           ))}
         </div>
 
-        {card && (
+        {card ? (
           <div className="rounded-lg border border-edge bg-panel">
             <ReportCard data={card} />
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-edge p-6 text-center text-sm text-muted"
+          >
+            {!source
+              ? "Pick a target site or click a map to start. The report card appears here."
+              : busy || hits.length > 0
+                ? "Loading the report card…"
+                : "No candidates to compare. Try turning off “New candidates only”."}
           </div>
         )}
 
@@ -412,13 +434,26 @@ export function Atlas() {
             />
           ) : (
             <>
-              <div className="border-t border-edge px-4 py-2 text-xs uppercase tracking-wide text-muted">
-                {busy ? "Ranking…" : `${hits.length} candidates`}
-                {dstBody && !busy && ` on ${BODY_NAME[dstBody]}`}
+              <div className="border-t border-edge px-4 py-2 text-xs text-muted">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="uppercase tracking-wide">
+                    {busy ? "Ranking…" : `${hits.length} candidates`}
+                    {dstBody && !busy && ` on ${BODY_NAME[dstBody]}`}
+                  </span>
+                  <label className="flex shrink-0 items-center gap-1.5 text-ink">
+                    <input
+                      type="checkbox"
+                      checked={newOnly}
+                      onChange={(e) => update({ new: e.target.checked ? "1" : null })}
+                    />
+                    New candidates only
+                  </label>
+                </div>
                 {hits.length > 0 && (
                   <Hint more="glossary" className="mt-1">
                     Terrain: how alike the shapes look (percentile) · physical: slope and relief
-                    match · model: resemblance to known analog sites · new: not a known analog site
+                    match · model: resemblance to known analog sites · new: not a known analog site.
+                    "New candidates only" hides sites already used as analogs.
                   </Hint>
                 )}
               </div>

@@ -407,10 +407,11 @@ export function Methodology() {
         <dd>How close the measured slope and relief are. For Mars it also counts albedo and dryness, and for ice sites frozen ground. 100% means the same values.</dd>
         <dt className="font-medium text-ink">Model %</dt>
         <dd>The analog model's percentile: how much the Earth tile resembles places already used as analogs.</dd>
-        <dt className="font-medium text-ink">Look ↔ Measurements</dt>
+        <dt className="font-medium text-ink">Rank matches by</dt>
         <dd>
-          How the ranking mixes the two. At 0 it ranks by look alone, like an image-only AI. At 1 it
-          ranks by measured slope and relief alone. The default, 0.3, is mostly look, with
+          The three buttons next to the site picker: how the ranking mixes how the terrain looks with its
+          measured slope and relief. “Looks” (weight 0) ranks by look alone, like an image-only AI.
+          “Measurements” (weight 1) ranks by measured slope and relief alone. “Balanced”, the default (0.3), is mostly look, with
           measurements as a strong check, and pushes down tiles that fail the ice, plant or water
           checks. Needs the live API; precomputed results use 0.3.
         </dd>

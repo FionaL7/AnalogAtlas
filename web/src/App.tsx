@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes } from "react-router-dom";
+import { Link, NavLink, Route, Routes } from "react-router-dom";
 
 import { apiMode } from "./lib/api";
 import { Atlas } from "./routes/Atlas";
@@ -25,10 +25,9 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <header className="flex flex-wrap items-center gap-3 border-b border-edge px-4 py-3">
-        <strong className="text-base">AnalogAtlas</strong>
-        <span className="hidden text-xs text-muted sm:inline">
-          Earth analogs for Moon-base and Mars landing sites
-        </span>
+        <Link to="/" aria-label="AnalogAtlas home" className="text-xl font-bold hover:text-[oklch(0.76_0.06_250)]">
+          AnalogAtlas
+        </Link>
         <nav className="ml-auto flex flex-wrap items-center gap-1">
           <NavLink to="/" className={link} end>Atlas</NavLink>
           {NAV.map(([to, label]) => (
