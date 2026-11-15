@@ -76,7 +76,7 @@ export function Discoveries() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
-      <header className="max-w-2xl">
+      <header>
         <h1 className="text-xl font-semibold">New analog candidates</h1>
         <p className="mt-2 text-sm text-muted">
           The analog model learned what 32 well-studied analog sites have in common: terrain, surface
@@ -91,7 +91,7 @@ export function Discoveries() {
       {study && study.length > 0 && (
         <section aria-labelledby="close-study">
           <h2 id="close-study" className="text-sm uppercase tracking-wide text-muted">Close study</h2>
-          <p className="mt-1 mb-3 max-w-2xl text-sm text-muted">
+          <p className="mt-1 mb-3 text-sm text-muted">
             {study.length} of the strongest new analogs, measured up close: radar roughness on both
             bodies, 30 m slopes, a satellite picture, and the full report card.
           </p>

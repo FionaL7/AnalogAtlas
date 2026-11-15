@@ -55,7 +55,7 @@ function Radar({ s }: { s: CloseStudyEntry }) {
   return (
     <section>
       <h2 className="text-sm uppercase tracking-wide text-muted">Radar roughness</h2>
-      <p className="mt-1 max-w-3xl text-sm text-muted">
+      <p className="mt-1 text-sm text-muted">
         CPR (circular polarisation ratio) says how much the ground scrambles a radar echo: ~0.2 is
         smooth, ~0.5 typical, 0.8 and up blocky. It senses roughness at centimetre-to-metre scale,
         what a footpad or wheel meets, which pictures and slope maps cannot see.
@@ -71,7 +71,7 @@ function Radar({ s }: { s: CloseStudyEntry }) {
                    empty="No Sentinel-1 scenes in the window." dashed />
       </dl>
       {verdict && <p className="mt-3 text-sm"><strong>{verdict}</strong></p>}
-      <ul className="mt-2 max-w-3xl list-disc pl-5 text-xs text-muted">
+      <ul className="mt-2 list-disc pl-5 text-xs text-muted">
         {!earth_cpr && (
           <li>
             Sentinel-1 sends straight (linear) waves, so it cannot measure CPR. Its VH/VV ratio rises
@@ -115,7 +115,7 @@ function Slopes({ s, card }: { s: CloseStudyEntry; card: TwinsResponse | null })
           <dd className="text-[11px] text-muted">{fine.source}</dd>
         </div>
       </dl>
-      <p className="mt-2 max-w-3xl text-xs text-muted">
+      <p className="mt-2 text-xs text-muted">
         Only the 1.9 km slopes compare across bodies. Slopes get steeper at finer baselines, so the
         30 m number shows what a rover would meet on Earth; the lunar equivalent needs LOLA's
         high-resolution polar DEMs, which this build does not include.
@@ -189,7 +189,7 @@ export function CloseStudyPage() {
 
       <section>
         <h2 className="text-sm uppercase tracking-wide text-muted">Why this pair, and why it is new</h2>
-        <p className="mt-2 max-w-3xl text-sm">{s.why_picked}</p>
+        <p className="mt-2 text-sm">{s.why_picked}</p>
         <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
           <div><dt className="inline text-muted">Rank among new analogs for {s.site_name}: </dt>
                <dd className="inline font-semibold tabular-nums">{s.rank_among_new == null ? "—" : `#${s.rank_among_new}`}</dd></div>

@@ -29,7 +29,7 @@ function Radar({ guide }: { guide: Guide }) {
   return (
     <section>
       <h2 className="text-sm uppercase tracking-wide text-muted">Radar roughness</h2>
-      <p className="mt-1 max-w-2xl text-sm text-muted">
+      <p className="mt-1 text-sm text-muted">
         Circular polarisation ratio (CPR) measures how rough the surface is at the radar's wavelength.
         Higher means blockier rock, fresh ejecta, or — in cold traps — possibly ice. It sees roughness
         that pictures and slope maps cannot, which is why it confirms an analog rather than finds one.
@@ -219,7 +219,7 @@ export function SiteGuide() {
 
           <section>
             <h2 className="text-sm uppercase tracking-wide text-muted">Best new Earth analogs</h2>
-            <p className="mt-1 max-w-2xl text-sm text-muted">
+            <p className="mt-1 text-sm text-muted">
               The strongest candidates that are not near any well-studied analog site.
             </p>
             <div className="mt-3">
@@ -237,7 +237,7 @@ export function SiteGuide() {
           {guide && guide.traps.length > 0 && (
             <section>
               <h2 className="text-sm uppercase tracking-wide text-muted">Lookalikes to avoid</h2>
-              <p className="mt-1 max-w-2xl text-sm text-muted">
+              <p className="mt-1 text-sm text-muted">
                 {guide.traps.length} of the 20 Earth tiles that look most like {site.name} fail a physical
                 check. <Link to="/traps" className="text-holds underline">About traps</Link>
               </p>

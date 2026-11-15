@@ -73,8 +73,8 @@ export function SiteSelect({ label, value, placeholder, groups, onChange }: Prop
         onMouseEnter={() => setActive(n)}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => pick(o.value)}
-        className={`cursor-pointer truncate px-3 py-1.5 text-sm ${
-          n === active ? "bg-[oklch(0.42_0.03_265)]" : ""
+        className={`cursor-pointer break-words px-3 py-1.5 text-sm ${
+          n === active ? "bg-hover" : ""
         } ${o.value === value ? "text-ink font-medium" : "text-ink/90"}`}
       >
         {o.label}
@@ -99,7 +99,7 @@ export function SiteSelect({ label, value, placeholder, groups, onChange }: Prop
         onKeyDown={onKeyDown}
         className="flex w-full items-center justify-between gap-3 rounded border border-edge bg-base py-2 pl-3 pr-3 text-left text-sm"
       >
-        <span className={`truncate ${current ? "" : "text-muted"}`}>{current?.label ?? placeholder}</span>
+        <span className={`min-w-0 break-words ${current ? "" : "text-muted"}`}>{current?.label ?? placeholder}</span>
         <svg aria-hidden viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}>
           <path d="M5 7.5l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

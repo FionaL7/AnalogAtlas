@@ -44,7 +44,7 @@ export function Traps() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
-      <header className="max-w-2xl">
+      <header>
         <h1 className="text-xl font-semibold">Lookalike traps</h1>
         <p className="mt-2 text-sm text-muted">
           For every Moon and Mars tile we took the 20 Earth tiles whose terrain <em>looks</em> most alike — what

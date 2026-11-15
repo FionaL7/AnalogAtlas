@@ -46,10 +46,10 @@ export function SearchResults({ body, label, hits, onPick, onClear }: Props) {
               <TileChip body={body} tile={hit} label={`Tile ${hit.tile_id}`} className="w-12 shrink-0" />
               <span className="min-w-0 flex-1">
                 <span className="block font-medium">{coords(hit.lat, hit.lon)}</span>
-                <span className="block truncate font-mono text-xs text-muted">{hit.tile_id}</span>
+                <span className="block break-all font-mono text-xs text-muted">{hit.tile_id}</span>
               </span>
               {hit.known_analog && (
-                <span className="max-w-[8rem] truncate rounded bg-edge px-1.5 py-0.5 text-xs text-muted">
+                <span className="max-w-[10rem] break-words rounded bg-edge px-1.5 py-0.5 text-xs text-muted">
                   known: {hit.known_analog}
                 </span>
               )}

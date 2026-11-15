@@ -29,7 +29,7 @@ export function Sites() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <header className="max-w-2xl">
+      <header>
         <h1 className="text-xl font-semibold">Field guides</h1>
         <p className="mt-2 text-sm text-muted">
           One page per Moon or Mars site: what the ground is like, the strongest new Earth analogs

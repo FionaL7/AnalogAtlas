@@ -14,7 +14,7 @@ export function Portfolio({ data, siteName }: { data: PortfolioFile; siteName: s
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="max-w-2xl text-sm text-muted">
+      <p className=" text-sm text-muted">
         No single Earth site matches {siteName} on every count. These{" "}
         <strong className="text-ink">{data.sites.length}</strong> together cover{" "}
         <strong className="text-ink">{covered} of {total}</strong> dimensions
@@ -42,7 +42,7 @@ export function Portfolio({ data, siteName }: { data: PortfolioFile; siteName: s
         ))}
       </ol>
 
-      <table className="w-full max-w-3xl text-left text-sm">
+      <table className="w-full text-left text-sm">
         <thead className="text-xs text-muted">
           <tr><th className="py-1 pr-3 font-normal">Dimension</th>
               <th className="py-1 pr-3 font-normal">On {mars ? "Mars" : `the ${WORLD_NAME[data.body] ?? "Moon"}`}</th>

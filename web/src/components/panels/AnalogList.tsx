@@ -50,7 +50,7 @@ export function AnalogList({ hits, body = "earth", selected, onSelect }: Props) 
                   </span>
                 )}
               </span>
-              <span className="mt-1 block truncate font-mono text-xs text-muted">{hit.tile_id}</span>
+              <span className="mt-1 block break-all font-mono text-xs text-muted">{hit.tile_id}</span>
             </span>
             <span className="shrink-0 text-right text-xs">
               <span className="block">

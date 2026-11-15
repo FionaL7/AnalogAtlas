@@ -46,8 +46,16 @@ function Row({ row, group }: { row: BreakdownRow; group: Group }) {
         )}
         {row.note && <span className="mt-0.5 block text-xs font-normal text-muted">{row.note}</span>}
       </th>
-      <td className="py-2 pr-3 tabular-nums">{row.moon}</td>
-      <td className="py-2 pr-3 tabular-nums">{row.earth}</td>
+      {row.kind === "compare" && row.moon === "-" && row.earth === "-" ? (
+        // Terrain shape compares the two pictures directly: neither place has a
+        // value of its own, so one label instead of two dashes that read as missing.
+        <td colSpan={2} className="py-2 pr-3 text-xs text-muted">compared as a pair</td>
+      ) : (
+        <>
+          <td className="py-2 pr-3 tabular-nums">{row.moon}</td>
+          <td className="py-2 pr-3 tabular-nums">{row.earth}</td>
+        </>
+      )}
       <td className="w-32 py-2">
         <span className="flex items-center gap-2">
           <span className="h-1.5 flex-1 overflow-hidden rounded bg-edge" aria-hidden>
@@ -108,7 +116,7 @@ function SideBySide({ data }: { data: TwinsResponse }) {
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-lg font-semibold uppercase tracking-wide text-[oklch(0.76_0.06_250)]">Side by side, same 85 km scale</h3>
+        <h3 className="text-lg font-semibold uppercase tracking-wide text-accent">Side by side, same 85 km scale</h3>
         <div role="radiogroup" aria-label="Picture layer" className="flex rounded border border-edge text-xs">
           {(["img", "shade"] as Layer[]).map((l) => (
             <button
@@ -151,7 +159,7 @@ function SideBySide({ data }: { data: TwinsResponse }) {
 export function FieldTestList({ tests }: { tests: FieldTests }) {
   return (
     <div className="mt-6">
-      <h3 className="text-lg font-semibold uppercase tracking-wide text-[oklch(0.76_0.06_250)]">What to test here</h3>
+      <h3 className="text-lg font-semibold uppercase tracking-wide text-accent">What to test here</h3>
       {tests.tests.length === 0 ? (
         <p className="mt-2 text-sm text-muted">
           No dimension holds strongly enough here to recommend a field test.
@@ -172,7 +180,7 @@ export function FieldTestList({ tests }: { tests: FieldTests }) {
       )}
       {tests.avoid.length > 0 && (
         <>
-          <h4 className="mt-6 text-lg font-semibold uppercase tracking-wide text-[oklch(0.76_0.06_250)]">
+          <h4 className="mt-6 text-lg font-semibold uppercase tracking-wide text-accent">
             Don’t rely on this site for
           </h4>
           <ul className="mt-1 list-disc pl-5 text-sm text-muted">
@@ -190,7 +198,7 @@ export function ReportCard({ data }: { data: TwinsResponse }) {
   return (
     <section className="p-4" aria-label="Report card">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-xl font-semibold uppercase tracking-wide text-[oklch(0.76_0.06_250)]">Report card</h2>
+        <h2 className="text-xl font-semibold uppercase tracking-wide text-accent">Report card</h2>
         {data.model_score != null && (
           <span className="text-xs text-muted" title={`Analog model (#29): how much this Earth tile resembles known ${world} analog sites, as a percentile of all Earth tiles`}>
             Analog model: <strong className="text-ink">{percent(data.model_score)}</strong> percentile
@@ -231,7 +239,7 @@ export function ReportCard({ data }: { data: TwinsResponse }) {
             <tbody key={g}>
               <tr>
                 <td colSpan={4} className="pt-8 pb-2">
-                  <span className="text-lg font-semibold uppercase tracking-wide text-[oklch(0.76_0.06_250)]">{GROUP_LABEL[g]}</span>
+                  <span className="text-lg font-semibold uppercase tracking-wide text-accent">{GROUP_LABEL[g]}</span>
                 </td>
               </tr>
               {groups[g].map((row) => (
