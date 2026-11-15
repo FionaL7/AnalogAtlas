@@ -45,13 +45,19 @@ const renderApp = () =>
     </MemoryRouter>,
   );
 
+// SiteSelect is a custom combobox, not a native <select>: open it, then
+// click the option by its visible name.
+const pickSite = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+  await user.click(await screen.findByLabelText("Target site"));
+  await user.click(await screen.findByRole("option", { name }));
+};
+
 describe("Atlas", () => {
   it("walks from a Moon base site to a report card", async () => {
     const user = userEvent.setup();
     renderApp();
 
-    const select = await screen.findByLabelText("Target site");
-    await user.selectOptions(select, "shackleton-rim");
+    await pickSite(user, "Shackleton rim");
 
     await waitFor(() => expect(screen.getByText(/12 candidates/)).toBeInTheDocument());
     expect(screen.getAllByText("new").length).toBeGreaterThan(0);
@@ -111,7 +117,7 @@ describe("Atlas", () => {
   it("walks from a Mars landing site to a Mars report card", async () => {
     const user = userEvent.setup();
     renderApp();
-    await user.selectOptions(await screen.findByLabelText("Target site"), "jezero-crater");
+    await pickSite(user, "Jezero crater");
 
     await waitFor(() => expect(screen.getByText(/12 candidates on Earth/)).toBeInTheDocument());
     expect(screen.getAllByRole("region").map((r) => r.getAttribute("aria-label")))
