@@ -4,7 +4,7 @@ The Moon and Mars sites we find Earth analogs for. As of 14 Nov 2026.
 
 - **Coordinates:** latitude, longitude in °E (−180 to 180). From the [IAU/USGS Gazetteer of Planetary Nomenclature](https://planetarynames.wr.usgs.gov/) unless noted.
 - **`~`** means approximate: the region lies on or near that point, not exactly at it.
-- **Machine-readable copy:** `analogatlas/sites.py` (`MOON_BASE_REGIONS`, `MOON_SITES`).
+- **Machine-readable copy:** `analogatlas/sites.py` (`MOON_BASE_REGIONS`, `MOON_SITES`, `MARS_SITES`).
 
 ## Moon: permanent base candidates (south pole)
 

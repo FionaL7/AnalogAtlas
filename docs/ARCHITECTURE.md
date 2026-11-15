@@ -218,7 +218,7 @@ Gitignored. Built at deploy time from `data/index/` (the `data` release), then b
 | File | Content |
 | --- | --- |
 | `sites.json` | Targets and known Earth analogs from [`sites.py`](../analogatlas/sites.py) — `MOON_BASE_REGIONS` (the Artemis candidate regions, the ones that answer "permanent Moon base"), `MOON_SITES`, `EARTH_PRESETS`, `KNOWN_EARTH_ANALOGS`: id, body, name, lat/lon, blurb, Trek tile URL. See [TARGET-SITES.md](TARGET-SITES.md) |
-| `dimensions.json` | Dimension ids, labels, notes, and which ones are "Earth can't reproduce" |
+| `dimensions.json` | Dimension ids, labels, notes, which ones are "Earth can't reproduce", and `bodies`: the worlds a row appears for (`moon`, `mars`) |
 | `tiles/{body}.json` | Per-tile geometry + features for the map layer: `tile_id, lat, lon, bbox, slope_med, relief_km`, and `known_analog` on Earth |
 | `analogs/{site_id}.json` | Precomputed top ~200 Earth analogs for one preset: `tile_id, score, visual_cos_scaled, physical, known_analog, model_score` (#29 percentile, `null` until trained) |
 | `twins/{site_id}__{tile_id}.json` | Precomputed report card for the pairs the demo opens, **climate baked in** so no NASA POWER call is needed at judging time. Also `field_tests` and `model_score`, as in `/twins` |
@@ -233,7 +233,7 @@ Gitignored. Built at deploy time from `data/index/` (the `data` release), then b
 
 ### 4.3 API (FastAPI)
 
-`body` is `"moon"` or `"earth"`. Coordinates are degrees. Errors are `{"detail": "..."}`; unknown `tile_id` → `404`.
+`body` is `"moon"`, `"moon_polar"`, `"mars"` or `"earth"`. A body whose index is not loaded returns `503`. Coordinates are degrees. Errors are `{"detail": "..."}`; unknown `tile_id` → `404`.
 
 **`POST /search`** — rank tiles within one body by text or image.
 ```json
@@ -259,11 +259,13 @@ Gitignored. Built at deploy time from `data/index/` (the `data` release), then b
     "known_analog": "McMurdo Dry Valleys, Antarctica", "model_score": 0.97}
  ]}
 ```
+`dst_body` (`"moon"` or `"mars"`, optional) is for `src_body: "earth"` only: which world to find terrain on. Default `moon`; any other source with `dst_body` is a `422`. Every Moon or Mars body pairs with Earth. `model_score` is the #29 score for the source's target: `analog_score_mars` for a Mars source, `analog_score_moon` otherwise, `null` for Moon or Mars hits.
+
 `w_phys` weights physical closeness against visual similarity (default 0.3). `score` mixes a standardised visual score with physical closeness, so **it is not a 0–1 similarity** — show `visual_cos_scaled` (a 0–1 percentile) and `physical` in the UI, not the raw `score`.
 
 Earth tiles that fail the ice, plant or water checks (`analogatlas/checks.py`, shared with traps) are pushed down by `w_phys × 8` ([#33](https://github.com/FionaL7/AnalogAtlas/issues/33)). At `w_phys=0` there is no push-down: that's the pure image-only ranking. Tiles without environment data are not penalised.
 
-**`GET /twins?src_tile_id=&earth_tile_id=&src_body=`** — the report card for one pair. `src_body` is `moon` (default) or `moon_polar`.
+**`GET /twins?src_tile_id=&earth_tile_id=&src_body=`** — the report card for one pair. `src_body` is `moon` (default), `moon_polar` or `mars`. The source tile is in the `moon` key whatever its body; for Mars it carries `body: "mars"`, and `field_tests` use the Mars rules.
 ```json
 {"moon": {"tile_id": "moon_6_0_90", "slope_med": 4.7, "relief_km": 1.2, "t_min_k": 50.0},
  "earth": {"tile_id": "earth_-77.50_162.00", "slope_med": 5.1, "relief_km": 1.0},
@@ -284,7 +286,9 @@ Earth tiles that fail the ice, plant or water checks (`analogatlas/checks.py`, s
 `breakdown` rows come straight from `analog.breakdown()`. Each row has a `kind`:
 - `compare`: measured on both bodies; `match` is `0..1`.
 - `no_equivalent`: Moon only (e.g. Diviner rock abundance); `match` is `null`.
-- `earth_limit`: Earth cannot reproduce it; `match` is always `0`. The fixed rows: Atmosphere, Gravity, Radiation, Magnetic field, Day/night cycle, Regolith dust.
+- `earth_limit`: Earth cannot reproduce it; `match` is always `0`. The fixed rows, Moon: Atmosphere, Gravity, Radiation, Magnetic field, Day/night cycle, Regolith dust. Mars: Atmosphere, Gravity, Radiation, Sunlight, Soil chemistry, Global dust storms.
+
+Each row also has a `basis` (#44): `measured`, `modelled` (the source value comes from a model) or `proxy` (two different quantities standing in for the same property). The app tags modelled and proxy rows.
 
 **Group by `kind`, not by `match`.** A real comparison can score 0 without being an Earth limit. `scripts/03_export.py` derives `dimensions.json` from `breakdown()` and carries `kind` into it and the pre-computed report cards.
 

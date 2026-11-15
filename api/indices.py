@@ -20,10 +20,15 @@ from analogatlas.sites import KNOWN_EARTH_ANALOGS
 
 log = logging.getLogger("analogatlas.api")
 
-BODIES = ("moon", "moon_polar", "earth")
-# Every lunar body pairs with Earth and vice versa; `moon_polar` is the south
-# pole on its own polar stereographic grid (#26), not a subset of `moon`.
-EARTH_ANALOG_OF = {"moon": "earth", "moon_polar": "earth", "earth": "moon"}
+BODIES = ("moon", "moon_polar", "mars", "earth")
+# Every Moon or Mars body pairs with Earth. An Earth source pairs with the
+# equatorial Moon unless the request asks for Mars (`dst_body`). `moon_polar`
+# is the south pole on its own polar stereographic grid (#26), not a subset
+# of `moon`.
+EARTH_ANALOG_OF = {"moon": "earth", "moon_polar": "earth", "mars": "earth", "earth": "moon"}
+# The #29 model scores Earth tiles per target; a source body picks its column.
+MODEL_SCORE_COLUMN = {"moon": "model_score", "moon_polar": "model_score",
+                      "mars": "model_score_mars"}
 KNOWN_RADIUS_KM = 150.0
 
 
@@ -52,16 +57,17 @@ def annotate_known(meta: pd.DataFrame) -> pd.DataFrame:
 
 
 def attach_model_scores(meta: pd.DataFrame) -> pd.DataFrame:
-    """Add `model_score`: the #29 analog model's 0-1 percentile for the Moon
-    target, from earth_scores.parquet. NaN everywhere until 04_train.py runs."""
+    """Add the #29 analog model's 0-1 percentiles from earth_scores.parquet:
+    `model_score` for the Moon target, `model_score_mars` for Mars. NaN
+    everywhere until 04_train.py runs."""
     path = C.INDEX / "earth_scores.parquet"
     meta = meta.copy()
-    meta["model_score"] = np.nan
-    if path.exists():
-        sc = pd.read_parquet(path)
-        if "analog_score_moon" in sc:
-            lookup = dict(zip(sc.tile_id.astype(str), sc.analog_score_moon.astype(float)))
-            meta["model_score"] = meta.tile_id.astype(str).map(lookup).astype(float)
+    sc = pd.read_parquet(path) if path.exists() else None
+    for out, col in (("model_score", "analog_score_moon"), ("model_score_mars", "analog_score_mars")):
+        meta[out] = np.nan
+        if sc is not None and col in sc:
+            lookup = dict(zip(sc.tile_id.astype(str), sc[col].astype(float)))
+            meta[out] = meta.tile_id.astype(str).map(lookup).astype(float)
     return meta
 
 
@@ -92,8 +98,9 @@ def get_index(request: Request, body: str) -> BodyIndex:
     return idx
 
 
-def other_body(body: str) -> str:
-    return EARTH_ANALOG_OF[body]
+def other_body(body: str, dst_body: str | None = None) -> str:
+    """The body the analogs are on. `dst_body` only applies to an Earth source."""
+    return dst_body if body == "earth" and dst_body else EARTH_ANALOG_OF[body]
 
 
 def row_by_tile_id(idx: BodyIndex, tile_id: str) -> int:
