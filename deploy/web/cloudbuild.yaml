@@ -34,4 +34,4 @@ steps:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-timeout: 1800s
+timeout: 3600s   # the export takes ~15-20 min since Mars (#45)

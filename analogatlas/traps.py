@@ -59,11 +59,13 @@ def _num(row: pd.Series, col: str) -> float | None:
     return None if v is None or pd.isna(v) else float(v)
 
 
-def check(moon: pd.Series, earth: pd.Series) -> list[dict]:
+def check(moon: pd.Series, earth: pd.Series, flags: pd.Series | None = None) -> list[dict]:
     """Which physical checks this pair fails, each with a plain reason.
 
     `moon` is the source tile, on the Moon or Mars. For an ice-rich Mars tile
     an Earth ice tile is a real analog, so ice is not a trap there.
+    `flags`: this Earth tile's row of `env_flags`, if already computed. Pass it
+    in loops: computing it for one row at a time was 70% of the export (#45).
     """
     hits = []
     mars = is_mars(moon)
@@ -73,7 +75,8 @@ def check(moon: pd.Series, earth: pd.Series) -> list[dict]:
         b = BREAKERS[bid]
         hits.append(dict(id=b.id, label=b.label, environment=b.environment, reason=reason))
 
-    flags = K.env_flags(earth.to_frame().T).iloc[0]
+    if flags is None:
+        flags = K.env_flags(earth.to_frame().T).iloc[0]
     ice, veg, water = _num(earth, "ice_frac"), _num(earth, "veg_frac"), _num(earth, "water_frac")
     ndvi, aridity = _num(earth, "ndvi"), _num(earth, "aridity")
     if flags["ice"] and not mars_ice_rich(moon):
@@ -102,19 +105,23 @@ def check(moon: pd.Series, earth: pd.Series) -> list[dict]:
 
 def traps_for_tile(src: BodyIndex, i: int, dst: BodyIndex, src_body: str,
                    top_n: int = TOP_N, w_phys: float = W_PHYS,
-                   model_scores: dict[str, float] | None = None) -> list[dict]:
+                   model_scores: dict[str, float] | None = None,
+                   dst_flags: pd.DataFrame | None = None) -> list[dict]:
     """Traps among the top_n lookalikes of one source tile.
 
     `model_scores`: Earth tile_id -> #29 analog score for this body
     (`analog_score_moon` or `analog_score_mars`, 0-1), if available.
+    `dst_flags`: `env_flags(dst.meta)`, so a scan over many tiles computes it once.
     """
+    if dst_flags is None:
+        dst_flags = K.env_flags(dst.meta)
     score, visual, _, _ = cross_body_scores(src, i, dst, w_phys)
     order = np.argsort(-visual)
     s_row = src.meta.iloc[i]
     out = []
     for vis_rank, j in enumerate(order[:top_n], start=1):
         e_row = dst.meta.iloc[j]
-        hits = check(s_row, e_row)
+        hits = check(s_row, e_row, dst_flags.iloc[j])
         if not hits:
             continue
         out.append(dict(
@@ -151,8 +158,9 @@ def scan(src: BodyIndex, dst: BodyIndex, src_body: str, top_n: int = TOP_N,
     what share of the image-only top picks fail a physics check, overall and
     per reason. That share is the headline number for the slides."""
     found = []
+    dst_flags = K.env_flags(dst.meta)
     for i in range(len(src.meta)):
-        found += traps_for_tile(src, i, dst, src_body, top_n, w_phys, model_scores)
+        found += traps_for_tile(src, i, dst, src_body, top_n, w_phys, model_scores, dst_flags)
     considered = len(src.meta) * min(top_n, len(dst.meta))
     by_reason = {bid: sum(any(b["id"] == bid for b in t["breakers"]) for t in found) for bid in BREAKERS}
     stats = dict(src_body=src_body, lookalikes_checked=considered, traps=len(found),
