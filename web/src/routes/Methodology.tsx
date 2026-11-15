@@ -396,6 +396,7 @@ export function Methodology() {
         <li><strong className="text-ink">Physical</strong>: closeness of median slope and local relief, both measured at ~1.9 km per pixel.</li>
         <li><strong className="text-ink">Analog model</strong>: how much the Earth tile resembles known analog sites, from terrain, look, climate, vegetation and ice (#29).</li>
         <li><strong className="text-ink">Report card</strong>: every dimension compared on its own, grouped into holds, breaks down, and what Earth cannot reproduce.</li>
+        <li><strong className="text-ink">Verdict</strong>: the share of comparable rows that hold (match ≥ 0.6) — strong ≥ 70%, moderate ≥ 40%, partial below. The tier is this rule, nothing else; the summary paragraph under it is drafted by an LLM from the card's numbers alone and reviewed by the team (labelled on every card).</li>
       </ul>
 
       <h2 id="glossary" className="mt-6 scroll-mt-4 font-semibold">What the words on the page mean</h2>
@@ -419,6 +420,8 @@ export function Methodology() {
         <dd>On the report card, how close one property is on the two bodies. 100% means the same value.</dd>
         <dt className="font-medium text-ink">Holds / breaks down</dt>
         <dd>A property holds at a match of 60% or more; below that, the analogy breaks down there.</dd>
+        <dt className="font-medium text-ink">Transfer confidence</dt>
+        <dd>The verdict's tier — how much of what is tested at the Earth site carries over: strong when ≥ 70% of the comparable rows hold, moderate at ≥ 40%, partial below. Not a probability, and never "replicates": Earth's limits always stand.</dd>
         <dt className="font-medium text-ink">Earth cannot reproduce</dt>
         <dd>Gravity, atmosphere, radiation: no place on Earth matches them, so they are listed as limits, not scored.</dd>
         <dt className="font-medium text-ink">Modelled / stand-in</dt>

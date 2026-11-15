@@ -31,6 +31,7 @@ import math
 import re
 import shutil
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -38,7 +39,7 @@ import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from analogatlas import analog, config as C, fieldtest, portfolio, tiles, traps  # noqa: E402
+from analogatlas import analog, config as C, fieldtest, portfolio, tiles, traps, verdict  # noqa: E402
 from analogatlas.sites import (  # noqa: E402
     EARTH_PRESETS, KNOWN_EARTH_ANALOGS, MARS_SITE_BLURBS, MARS_SITES, MOON_BASE_REGIONS, MOON_SITES,
 )
@@ -185,6 +186,15 @@ def build_dimensions(moon: analog.BodyIndex, earth: analog.BodyIndex,
 
 
 # ------------------------------------------------------------- exports ------
+@lru_cache(maxsize=1)
+def verdict_prose() -> dict[str, dict]:
+    """{twin stem: {text, model}} from scripts/07_verdicts.py (#51); {} until it runs."""
+    path = C.INDEX / "verdicts.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text())
+
+
 def load_model_scores(column: str = "analog_score_moon") -> dict[str, float] | None:
     """Earth tile_id -> #29 model score (0-1 percentile, 1 = most like the
     known Moon analogs). None until scripts/04_train.py has run."""
@@ -282,7 +292,12 @@ def export_twins(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
 
         rows = analog.breakdown(moon_row, earth_row, climate)
         rows = rows.astype(object).where(pd.notna(rows), None)
+        tests = fieldtest.what_to_test(rows, body="mars" if site["body"] == "mars" else "moon")
         path = out / "twins" / f"{site['id']}__{hit['tile_id']}.json"
+        v = verdict.verdict(rows, tests)
+        prose = verdict_prose().get(path.stem)
+        if v and prose:
+            v["prose"] = prose   # reviewed LLM text from scripts/07_verdicts.py (#51)
         write_json(path, dict(
             site_id=site["id"],
             # the source tile, Moon or Mars; it keeps the `moon` key for the
@@ -297,7 +312,8 @@ def export_twins(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
                             match=clean(r.match, 4), note=r.note, kind=r.kind,
                             basis=getattr(r, "basis", None))
                        for r in rows.itertuples()],
-            field_tests=fieldtest.what_to_test(rows, body="mars" if site["body"] == "mars" else "moon"),
+            field_tests=tests,
+            verdict=v,
             model_score=hit.get("model_score"),
         ))
         written.append(path.name)
@@ -526,6 +542,10 @@ def main() -> int:
     export_candidates(out)
     export_radar(sites, out)
     export_close_study(sites, by_body, earth, results_by_site, out, with_climate=not args.no_climate)
+
+    # the tier rule, for the methodology page (#50)
+    write_json(out / "verdict.json", dict(rule=verdict.RULE, holds=verdict.HOLDS,
+                                          strong=verdict.STRONG, moderate=verdict.MODERATE))
 
     src_validation = C.INDEX / "validation.json"
     if src_validation.exists():

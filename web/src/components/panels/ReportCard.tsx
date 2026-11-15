@@ -11,6 +11,7 @@ import { sourceBodyOf, type TileLike } from "../../lib/chips";
 import { GROUP_LABEL, coords, groupBreakdown, percent, type Group } from "../../lib/format";
 import {
   BODY_NAME, WORLD_NAME, type BreakdownRow, type FieldTests, type Layer, type TwinsResponse,
+  type Verdict,
 } from "../../lib/types";
 import { Hint } from "../Hint";
 import { TileChip } from "../TileChip";
@@ -59,6 +60,39 @@ function Row({ row, group }: { row: BreakdownRow; group: Group }) {
         </span>
       </td>
     </tr>
+  );
+}
+
+const TIER: Record<Verdict["tier"], { label: string; cls: string }> = {
+  strong: { label: "Strong transfer confidence", cls: "border-holds/40 bg-holds/10 text-holds" },
+  moderate: { label: "Moderate transfer confidence", cls: "border-limit/40 bg-limit/10 text-ink" },
+  partial: { label: "Partial transfer confidence", cls: "border-breaks/40 bg-breaks/10 text-breaks" },
+};
+
+/** The bottom line. The tier and counts are rule-based from the rows below
+ *  (#50); the paragraph may be LLM-drafted from those same rows and is
+ *  human-reviewed (#51) — the label always says which. */
+function VerdictBlock({ verdict }: { verdict: Verdict }) {
+  const tier = TIER[verdict.tier];
+  const held = Math.round(verdict.holds_frac * verdict.n_compare);
+  return (
+    <div className="mt-3 rounded border border-edge p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${tier.cls}`}>
+          {tier.label}
+        </span>
+        <span className="text-xs text-muted">
+          {held} of {verdict.n_compare} comparable dimensions hold
+        </span>
+      </div>
+      <p className="mt-2 text-sm">{verdict.prose ? verdict.prose.text : verdict.sentence}</p>
+      <Hint more="glossary" className="mt-2">
+        Tier computed from the measurements below.{" "}
+        {verdict.prose
+          ? `Summary drafted by ${verdict.prose.model} from those measurements only, reviewed by the team.`
+          : "Summary assembled from those measurements, no AI involved."}
+      </Hint>
+    </div>
   );
 }
 
@@ -175,6 +209,8 @@ export function ReportCard({ data }: { data: TwinsResponse }) {
           Climate rows unavailable — NASA POWER did not answer. Everything else is unaffected.
         </p>
       )}
+
+      {data.verdict && <VerdictBlock verdict={data.verdict} />}
 
       <SideBySide data={data} />
 

@@ -237,6 +237,12 @@ export function mockTwins(src_tile_id: string, earth_tile_id: string): TwinsResp
              visual_cos_scaled: 0.91 },
     climate: { TS_MIN: -55.2, TS_MAX: 8.1, PRECTOTCORR: 0.02, ALLSKY_SFC_SW_DWN: 3.1 },
     model_score: 0.94,
+    verdict: {
+      tier: "moderate", holds_frac: 0.5714, n_compare: 7,
+      top_holds: ["Dryness", "Terrain shape (ML)"],
+      top_breaks: ["Surface temperature swing", "Coldest surface"],
+      sentence: "Moderate analog: 4 of 7 comparable dimensions hold, led by Dryness and Terrain shape (ML); Surface temperature swing and Coldest surface break down. Best suited to dust handling and dry excavation.",
+    },
     field_tests: {
       tests: [
         { title: "Rover mobility and traverse planning", risk: "Getting stuck or tipping on slopes",

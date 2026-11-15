@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from analogatlas.analog import breakdown, earth_climate
 from analogatlas.fieldtest import what_to_test
+from analogatlas.verdict import verdict
 
 from ..indices import MODEL_SCORE_COLUMN, get_index, json_scalar, row_by_tile_id, row_dict
 from ..schemas import Body, TwinsResponse
@@ -52,6 +53,7 @@ def get_twins(
 
     rows = breakdown(moon_row, earth_row, climate)
     rows = rows.astype(object).where(pd.notna(rows), None)
+    tests = what_to_test(rows, body="mars" if src_body == "mars" else "moon")
 
     return TwinsResponse(
         moon=row_dict(moon, i),
@@ -59,6 +61,7 @@ def get_twins(
                "visual_cos_scaled": float(earth_row.visual_cos_scaled)},
         climate=None if climate is None else {k: json_scalar(v) for k, v in climate.items()},
         breakdown=rows.to_dict("records"),
-        field_tests=what_to_test(rows, body="mars" if src_body == "mars" else "moon"),
+        field_tests=tests,
+        verdict=verdict(rows, tests),
         model_score=json_scalar(earth_row.get(MODEL_SCORE_COLUMN[src_body])),
     )

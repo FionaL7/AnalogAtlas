@@ -117,6 +117,7 @@ Every dataset, with its source and status, is listed in [docs/RESOURCES.md](docs
 This project was built with AI assistance, disclosed as the Space Apps rules require:
 
 - **Claude Code** (Anthropic) was used to write and review code and documentation. Commits it co-authored carry a `Co-Authored-By: Claude` trailer, so the AI-assisted history is auditable.
+- **Verdict summaries are LLM-drafted, human-reviewed.** Each report card's verdict *tier* is rule-based from our measured data (`analogatlas/verdict.py`); the ~100-word summary beneath it is drafted by an LLM (`scripts/07_verdicts.py`) strictly from that card's numbers, then read by the team before shipping. The model is named in the app next to every summary and recorded in `data/index/verdicts.json`.
 - The solution idea, the challenge approach, and the scientific interpretation are the team's own.
 - No AI-generated imagery, video or audio is used in the project or its submission materials.
 

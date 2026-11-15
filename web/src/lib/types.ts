@@ -106,6 +106,21 @@ export interface FieldTests {
   avoid: { dimension: string; reason: string }[];
 }
 
+/** The card's bottom line (#50): a rule-based transfer-confidence tier over
+ *  the compare rows, and optionally an LLM-drafted, human-reviewed narration
+ *  of it (#51). The tier and numbers are ours; only `prose` involves an LLM. */
+export interface Verdict {
+  tier: "strong" | "moderate" | "partial";
+  /** Share of comparable rows with match ≥ 0.6. */
+  holds_frac: number;
+  n_compare: number;
+  top_holds: string[];
+  top_breaks: string[];
+  /** Template sentence, always present; the fallback when `prose` is absent. */
+  sentence: string;
+  prose?: { text: string; model: string } | null;
+}
+
 export interface TwinsResponse {
   moon: Record<string, string | number | null>;
   earth: Record<string, string | number | null>;
@@ -113,6 +128,8 @@ export interface TwinsResponse {
   breakdown: BreakdownRow[];
   /** What to test at the Earth site. Absent from older exports. */
   field_tests?: FieldTests | null;
+  /** The bottom line (#50/#51). Absent from older exports. */
+  verdict?: Verdict | null;
   model_score?: number | null;
   /** Only on the close-study pairs (#19). */
   close_study?: CloseStudy;

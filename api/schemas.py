@@ -115,10 +115,23 @@ class FieldTests(BaseModel):
     avoid: list[AvoidNote]
 
 
+class Verdict(BaseModel):
+    """The card's bottom line (#50): a rule-based transfer-confidence tier.
+    Live responses carry no `prose` - that is reviewed text from the static
+    export (#51), never generated at request time."""
+    tier: Literal["strong", "moderate", "partial"]
+    holds_frac: float
+    n_compare: int
+    top_holds: list[str]
+    top_breaks: list[str]
+    sentence: str
+
+
 class TwinsResponse(BaseModel):
     moon: dict[str, Any]
     earth: dict[str, Any]
     climate: dict[str, Any] | None
     breakdown: list[BreakdownRow]
     field_tests: FieldTests | None = None
+    verdict: Verdict | None = None
     model_score: float | None = None
