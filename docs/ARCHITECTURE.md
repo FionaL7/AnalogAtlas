@@ -1,6 +1,6 @@
 # Architecture
 
-As of 14 Nov 2026. The contract the pipeline, API and frontend all build against, so three agents can work in parallel without drifting apart. If this doc and the code disagree, fix one to match the other — don't let them drift.
+As of 15 Nov 2026. The contract the pipeline, API and frontend all build against, so three agents can work in parallel without drifting apart. If this doc and the code disagree, fix one to match the other — don't let them drift.
 
 Related: [PLAN.md](PLAN.md) (status, decisions), [REQUIREMENTS.md](REQUIREMENTS.md) (what we must deliver), [RESOURCES.md](RESOURCES.md) (data sources).
 
@@ -72,18 +72,18 @@ This directly answers a requirement: [REQUIREMENTS.md](REQUIREMENTS.md#4-things-
 | Layer | Choice | Why |
 | --- | --- | --- |
 | Frontend | **React + TypeScript (strict)**, Vite | Decided in [PLAN.md](PLAN.md#decisions). Vite over Next.js: we have no SSR need — the export is static JSON and the map is client-only |
-| Styling / UI | **Tailwind CSS + shadcn/ui** (Radix primitives), **lucide-react** icons | Accessible components that live in our repo and are customizable; no design system to invent under time pressure |
-| Theme | Dark-first, light toggle | Planetary imagery reads best on dark |
+| Styling / UI | **Tailwind CSS v4**, hand-rolled components (no component library) | Small, fixed set of views; a design system bought nothing under time pressure |
+| Theme | Dark only | Planetary imagery reads best on dark; no light variant built |
 | Map engine | **Leaflet** via `react-leaflet`, CRS EPSG:4326 | Decided in #24. NASA Trek (Moon) and our GIBS requests (Earth) are plain lat/lon tiles; Leaflet renders that CRS natively and its zoom-0 grid (2×1 tiles) is exactly Trek's. MapLibre only supports Web Mercator or globe. Two instances: one per body, loaded lazily |
 | Score layer | Leaflet canvas renderer: the full tile grid as faint outlines, ranked results as circle markers coloured by a viridis-like ramp, with a legend | ~17k rectangles is small for one canvas. **deck.gl is not justified at this scale** |
 | Earth basemap | **NASA GIBS** WMS/WMTS (Blue Marble, ASTER hillshade) | Already our tile source ([`config.py`](../analogatlas/config.py)); NASA's own imagery, which judges notice |
 | Moon basemap | **NASA Moon Trek** WMTS (LROC WAC, LOLA hillshade) | Same layers the index is built from, so the map and the scores agree |
-| Charts | **Recharts** (via shadcn/ui charts): radar + horizontal bars | Report card is a radar (per-dimension match) plus bars; matches the UI system |
+| Charts | Hand-rolled Tailwind bars (`ReportCard.tsx`) | Report card is per-dimension bars with the number always printed alongside; no charting library pulled in for this |
 | API | **FastAPI** + uvicorn, single process | Thin wrapper over [`analogatlas/analog.py`](../analogatlas/analog.py); loads the index once at startup |
 | ML runtime | **PyTorch + open_clip**, `ViT-B-32` / `laion2b_s34b_b79k` | Already pinned in `config.py`; CPU is fine for one query vector |
-| State | **Zustand** (app state) + URL query params | Every view is a shareable link: `/atlas?site=shackleton&w_phys=0.3&cell=earth_-77.50_162.00` |
-| Content | **MDX** field guides for the 2–3 close-study sites | The brief explicitly asks us to document findings for a public audience |
-| Tooling | **pnpm**, **Biome** (lint + format), **Vitest**, one **Playwright** smoke test | One tool for lint+format; smoke test guards the demo path |
+| State | React component state + URL query params | Every view is a shareable link: `/atlas?site=shackleton&w_phys=0.3&cell=earth_-77.50_162.00` |
+| Content | Field-guide copy built in TypeScript (`lib/guide.ts`) from the static export | No MDX: the content is assembled from `sites.json` and the per-tile data, not hand-authored prose files |
+| Tooling | **npm**, **TypeScript** (strict), **Vitest** | No separate linter configured; `tsc -b` in the build is the type-correctness gate |
 | Hosting | **Google Cloud**: API on Cloud Run, frontend on Firebase Hosting. Domain: analogatlas.earth | [Decided](PLAN.md#decisions). How it deploys: [DEPLOY.md](DEPLOY.md) |
 
 ## 3. Pages
@@ -315,18 +315,17 @@ analogatlas/     search core + pipeline library (existing)
 scripts/
   01_tiles.py      step 1: grids + tile download
   02_features.py   step 2: features + embeddings → data/index/
-  03_export.py     step 3: static export → web/public/data/   (to write)
+  03_export.py     step 3: static export → web/public/data/
   04_train.py      step 4: analog model, hold-one-out, new candidates (#29)
   04_radar.py      radar roughness: Mini-RF download, per-site CPR, RCM search (#17, #18)
   05_validate.py   step 5: crater retrieval + known-analog ranking → validation.json (#16)
   05_portfolio_figure.py  slide figure docs/figures/portfolio.png (#31)
-api/               FastAPI — to write
+api/               FastAPI
   main.py            app factory; loads both BodyIndex at startup
   routers/           search.py, analogs.py, twins.py, tile.py
-web/               React + Vite — to write
-  src/components/    map/, panels/, charts/, ui/ (shadcn)
-  src/lib/           data loading, store, url-state
-  content/sites/     MDX field guides
+web/               React + Vite
+  src/components/    map/, panels/ (report card, search, site select)
+  src/lib/           data loading, url-state, field-guide assembly
   public/data/       static export (§4.2)
 docs/
 data/              gitignored: raw/ tiles/ index/
@@ -347,14 +346,14 @@ data/              gitignored: raw/ tiles/ index/
 - `t_max_k` / `t_min_k` are labelled as modelled, not measured, everywhere they appear.
 
 **Accessibility and presentation**
-- Keyboard-navigable controls (Radix), colour-blind-safe sequential palette (viridis/cividis-like) with a legend, never colour alone — every value is also in the panel.
+- Keyboard-navigable native controls, colour-blind-safe sequential palette (viridis/cividis-like) with a legend, never colour alone — every value is also in the panel.
 - `prefers-reduced-motion` respected.
 - Responsive: full two-pane explorer on desktop, bottom-sheet panels on mobile.
-- Open Graph images per field guide; URL state is shareable.
+- URL state is shareable.
 
 **Testing and delivery**
-- Vitest: data loaders, score formatting, report-card grouping.
-- One Playwright smoke test covering the demo path: load `/atlas` → pick a preset → click a tile → report card renders.
+- Vitest + React Testing Library: data loaders, score formatting, report-card grouping, key components.
+- No end-to-end test; the demo path is checked by hand before judging.
 - Every link reachable with no login, checked in a private window ([R3](REQUIREMENTS.md#from-the-space-apps-rules)).
 - 2–3 report cards complete end to end before feature freeze.
 

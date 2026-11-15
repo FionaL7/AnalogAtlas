@@ -53,11 +53,13 @@ export function Sites() {
                     <span className="min-w-0">
                       <span className="block font-medium">{s.name}</span>
                       <span className="mt-1 block text-xs text-muted">
-                        {cell?.illum_max != null && <>sunlit up to {percent(cell.illum_max)} · </>}
-                        {cell?.psr_frac != null && <>{percent(cell.psr_frac)} permanent shadow · </>}
-                        {cpr != null && <>radar CPR {cpr.toFixed(2)} · </>}
-                        {nTraps != null && <>{nTraps} traps</>}
-                        {s.in_index === false && "outside the index"}
+                        {[
+                          cell?.illum_max != null && `sunlit up to ${percent(cell.illum_max)}`,
+                          cell?.psr_frac != null && `${percent(cell.psr_frac)} permanent shadow`,
+                          cpr != null && `radar CPR ${cpr.toFixed(2)}`,
+                          nTraps != null && `${nTraps} traps`,
+                          s.in_index === false && "outside the index",
+                        ].filter(Boolean).join(" · ")}
                       </span>
                     </span>
                   </Link>

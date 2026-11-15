@@ -1,11 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- AnalogAtlas: a globe with its graticule, and a small moon beside it.
-       Colours match the app's dark theme tokens (base, accent, holds). -->
-  <rect width="64" height="64" rx="14" fill="#0b0f18"/>
-  <g fill="none" stroke="#95b5d6" stroke-width="3">
-    <circle cx="28" cy="34" r="19"/>
-    <ellipse cx="28" cy="34" rx="8" ry="19"/>
-    <path d="M9 34h38M12 24h32M12 44h32"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AnalogAtlas">
+  <!-- Two bodies held side by side: Earth (blue) and a Moon/Mars disc (rust).
+       Deliberately plain so it survives 16px. Colours follow the app tokens
+       (accent / breaks in web/src/index.css), pushed up in chroma to stay
+       legible on both light and dark browser chrome. -->
+  <g>
+    <path d="M32 4 A28 28 0 0 0 32 60 Z" fill="#418ad1" transform="translate(-2.5 0)"/>
+    <path d="M32 4 A28 28 0 0 1 32 60 Z" fill="#d97230" transform="translate(2.5 0)"/>
   </g>
-  <circle cx="51" cy="13" r="7" fill="#3fbf86"/>
+  <!-- craters: invisible at 16px, texture at 64px and above -->
+  <g fill="#000" opacity="0.22">
+    <circle cx="46" cy="22" r="5"/>
+    <circle cx="52" cy="40" r="3"/>
+    <circle cx="40" cy="46" r="2.5"/>
+  </g>
 </svg>
