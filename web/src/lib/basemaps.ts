@@ -37,6 +37,16 @@ export const BASEMAPS: Record<Body, Basemap> = {
     maxNativeZoom: 6,
     attribution: "LOLA polar hillshade: NASA/GSFC/MIT, via NASA Moon Trek",
   },
+  mars: {
+    kind: "xyz",
+    // Viking colour mosaic via NASA Mars Trek WMTS: the imagery the Mars
+    // index is built from (docs/MARS-PLAN.md).
+    url:
+      "https://trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/" +
+      "default/default028mm/{z}/{y}/{x}.jpg",
+    maxNativeZoom: 7,
+    attribution: "Viking MDIM 2.1 colour mosaic: NASA/JPL/USGS, via NASA Mars Trek",
+  },
   earth: {
     kind: "wms",
     // Blue Marble via NASA GIBS WMS (config.GIBS_WMS, config.EARTH_LAYERS["img"])

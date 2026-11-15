@@ -1,10 +1,10 @@
 /**
  * One lookalike trap (#30): an Earth tile an image-only AI would pick for a
- * lunar tile, and the physical reason it is wrong. Shown in terrain shape
+ * Moon or Mars tile, and the physical reason it is wrong. Shown in terrain shape
  * (hillshade), the channel the lookalike was found in.
  */
 import { coords, percent } from "../lib/format";
-import type { Trap } from "../lib/types";
+import { BODY_NAME, type Trap } from "../lib/types";
 import { TileChip } from "./TileChip";
 
 export function TrapCard({ trap, compact }: { trap: Trap; compact?: boolean }) {
@@ -18,10 +18,10 @@ export function TrapCard({ trap, compact }: { trap: Trap; compact?: boolean }) {
           {!compact && <p className="mt-1 text-[11px] text-muted">Earth · {coords(earth.lat, earth.lon)}</p>}
         </div>
         <div>
-          <TileChip body={trap.src_body} tile={moon} layer="shade" label={`Lunar tile at ${coords(moon.lat, moon.lon)}`} />
+          <TileChip body={trap.src_body} tile={moon} layer="shade" label={`${BODY_NAME[trap.src_body]} tile at ${coords(moon.lat, moon.lon)}`} />
           {!compact && (
             <p className="mt-1 text-[11px] text-muted">
-              {trap.src_body === "moon_polar" ? "South pole" : "Moon"} · {coords(moon.lat, moon.lon)}
+              {trap.src_body === "moon_polar" ? "South pole" : BODY_NAME[trap.src_body]} · {coords(moon.lat, moon.lon)}
             </p>
           )}
         </div>

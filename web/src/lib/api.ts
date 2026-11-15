@@ -101,8 +101,8 @@ export async function analogs(req: AnalogsRequest, siteId?: string): Promise<Ana
 }
 
 /**
- * The report card for one lunar tile and one Earth tile. `srcBody` is the
- * lunar body (`moon` or `moon_polar`): the API needs it to find the tile.
+ * The report card for one Moon or Mars tile and one Earth tile. `srcBody` is
+ * that tile's body (`moon`, `moon_polar` or `mars`): the API needs it to find it.
  */
 export async function twins(
   srcTileId: string,

@@ -8,7 +8,9 @@ import * as api from "../lib/api";
 import { percent } from "../lib/format";
 import type { Body, TrapsFile } from "../lib/types";
 
-const BODY_NAME: Record<string, string> = { moon: "Moon, 60°S–60°N", moon_polar: "Moon south pole" };
+const BODY_NAME: Record<string, string> = {
+  moon: "Moon, 60°S–60°N", moon_polar: "Moon south pole", mars: "Mars, 60°S–60°N",
+};
 const REASON_LABEL: Record<string, string> = {
   ice: "Ice sheet, not rock",
   vegetation: "Covered in plants",
@@ -45,7 +47,7 @@ export function Traps() {
       <header className="max-w-2xl">
         <h1 className="text-xl font-semibold">Lookalike traps</h1>
         <p className="mt-2 text-sm text-muted">
-          For every lunar tile we took the 20 Earth tiles whose terrain <em>looks</em> most alike — what
+          For every Moon and Mars tile we took the 20 Earth tiles whose terrain <em>looks</em> most alike — what
           an image-only AI would recommend — and checked each against physics: ice, plants, water, a wet
           climate, or very different slopes. This is why AnalogAtlas never ranks on looks alone.
         </p>

@@ -18,6 +18,7 @@ interface Props {
 const BODY_NAME: Record<Body, string> = {
   moon: "the Moon",
   moon_polar: "the lunar south pole",
+  mars: "Mars",
   earth: "Earth",
 };
 

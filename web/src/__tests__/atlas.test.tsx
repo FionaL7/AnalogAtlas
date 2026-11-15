@@ -16,12 +16,13 @@ import type { MapPaneProps } from "../components/map/MapPane";
 const BODY_LABEL: Record<string, string> = {
   moon: "Moon",
   moon_polar: "Moon south pole",
+  mars: "Mars",
   earth: "Earth",
 };
 
 // A click inside each body's index, so the stub can exercise map-click search.
 const CLICK_AT: Record<string, [number, number]> = {
-  moon: [10, 20], moon_polar: [-86, 0], earth: [-24.1, -69.9],
+  moon: [10, 20], moon_polar: [-86, 0], mars: [18.4, 77.7], earth: [-24.1, -69.9],
 };
 
 vi.mock("../components/map/LeafletMap", () => ({
@@ -105,6 +106,81 @@ describe("Atlas", () => {
     // From Earth, the analogs are Moon tiles.
     await waitFor(() => expect(screen.getByText(/candidates on Moon/)).toBeInTheDocument());
     expect(screen.getByText(/Searching from Earth/)).toBeInTheDocument();
+  });
+
+  it("walks from a Mars landing site to a Mars report card", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.selectOptions(await screen.findByLabelText("Target site"), "jezero-crater");
+
+    await waitFor(() => expect(screen.getByText(/12 candidates on Earth/)).toBeInTheDocument());
+    expect(screen.getAllByRole("region").map((r) => r.getAttribute("aria-label")))
+      .toEqual(["Earth map", "Mars map"]);
+    expect(screen.getByRole("region", { name: "Mars map" })).toHaveTextContent("1 markers");
+    // The site fixes the world: the Moon buttons are off while a Mars site is open.
+    expect(screen.getByRole("button", { name: "Mars" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Moon south pole" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /24\.08°S/ }));
+    await waitFor(() => expect(screen.getByText("Report card")).toBeInTheDocument());
+
+    const card = screen.getByRole("region", { name: "Report card" });
+    // The source column is Mars, with Mars's own limits, not the Moon's.
+    expect(within(card).getByRole("columnheader", { name: "Mars" })).toBeInTheDocument();
+    expect(within(card).queryByRole("columnheader", { name: "Moon" })).not.toBeInTheDocument();
+    expect(within(card).getByRole("row", { name: /Soil chemistry/ })).toBeInTheDocument();
+    expect(within(card).getByRole("row", { name: /Global dust storms/ })).toBeInTheDocument();
+    expect(within(card).queryByRole("row", { name: /Regolith dust/ })).not.toBeInTheDocument();
+    expect(within(card).getByRole("img", { name: /Mars tile near .*Mars Trek/ })).toBeInTheDocument();
+
+    // A model and a stand-in are tagged; a measurement is not.
+    expect(within(within(card).getByRole("row", { name: /Surface material/ })).getByText("stand-in"))
+      .toBeInTheDocument();
+    expect(within(within(card).getByRole("row", { name: /Surface temperature swing/ })).getByText("modelled"))
+      .toBeInTheDocument();
+    const slope = within(card).getByRole("row", { name: /Median slope/ });
+    expect(within(slope).queryByText("modelled")).not.toBeInTheDocument();
+    expect(within(slope).queryByText("stand-in")).not.toBeInTheDocument();
+    // Earth's limits are not "measured vs modelled" claims, so they carry no tag.
+    expect(within(within(card).getByRole("row", { name: /Atmosphere/ })).queryByText("modelled"))
+      .not.toBeInTheDocument();
+
+    expect(within(card).getByText("Life detection at low biomass")).toBeInTheDocument();
+    expect(within(card).getByText(/Mars surface temperatures are modelled/)).toBeInTheDocument();
+    expect(card).not.toHaveTextContent(/lunar/i);
+    expect(screen.getByRole("link", { name: "Field guide →" })).toHaveAttribute("href", "/sites/jezero-crater");
+  });
+
+  it("finds Mars terrain from an Earth click once Mars is the world shown", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: "Mars" }));
+    expect(await screen.findByRole("region", { name: "Mars map" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "click earth map" }));
+    await waitFor(() => expect(screen.getByText(/candidates on Mars/)).toBeInTheDocument());
+    expect(screen.getByRole("region", { name: "Mars map" })).toHaveTextContent("12 markers");
+  });
+
+  it("starts an analog search from a click on the Mars map", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: "Mars" }));
+    await user.click(await screen.findByRole("button", { name: "click mars map" }));
+    await waitFor(() => expect(screen.getByText(/12 candidates on Earth/)).toBeInTheDocument());
+    expect(screen.getByText(/Searching from Mars/)).toBeInTheDocument();
+  });
+
+  it("searches Mars by text", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.selectOptions(await screen.findByLabelText("Search on"), "mars");
+    expect(screen.getByLabelText("Describe a landscape")).toHaveAttribute(
+      "placeholder", expect.stringMatching(/canyon|delta/));
+    await user.type(screen.getByLabelText("Describe a landscape"), "layered canyon walls");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    const results = await screen.findByRole("region", { name: "Search results" });
+    expect(results).toHaveTextContent(/12 matches on Mars/);
+    expect(screen.getByRole("region", { name: "Mars map" })).toHaveTextContent("12 markers");
   });
 
   it("shows the methodology page's honesty section", async () => {

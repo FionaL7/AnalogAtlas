@@ -1,4 +1,4 @@
-/** Field guides: one page per lunar target site, base regions first. */
+/** Field guides: one page per Moon or Mars target site, base regions first. */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -23,7 +23,8 @@ export function Sites() {
   const lunar = sites.filter((s) => s.body !== "earth");
   const groups: [string, Site[]][] = [
     ["Artemis candidate base regions", lunar.filter((s) => s.is_base_region)],
-    ["Other Moon sites", lunar.filter((s) => !s.is_base_region)],
+    ["Other Moon sites", lunar.filter((s) => !s.is_base_region && s.body !== "mars")],
+    ["Mars landing and exploration sites", lunar.filter((s) => s.body === "mars")],
   ];
 
   return (
@@ -31,8 +32,9 @@ export function Sites() {
       <header className="max-w-2xl">
         <h1 className="text-xl font-semibold">Field guides</h1>
         <p className="mt-2 text-sm text-muted">
-          One page per lunar site: what the ground is like, its radar roughness from LRO Mini-RF, the
-          strongest new Earth analogs with what to test there, and the lookalikes to avoid.
+          One page per Moon or Mars site: what the ground is like, the strongest new Earth analogs
+          with what to test there, and the lookalikes to avoid. Lunar sites add radar roughness from
+          LRO Mini-RF.
         </p>
       </header>
       {groups.map(([title, list]) => list.length > 0 && (

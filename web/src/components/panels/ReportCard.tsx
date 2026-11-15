@@ -7,9 +7,11 @@
  */
 import { useState } from "react";
 
-import { lunarBodyOf, type TileLike } from "../../lib/chips";
+import { sourceBodyOf, type TileLike } from "../../lib/chips";
 import { GROUP_LABEL, coords, groupBreakdown, percent, type Group } from "../../lib/format";
-import type { BreakdownRow, FieldTests, Layer, TwinsResponse } from "../../lib/types";
+import {
+  BODY_NAME, WORLD_NAME, type BreakdownRow, type FieldTests, type Layer, type TwinsResponse,
+} from "../../lib/types";
 import { TileChip } from "../TileChip";
 
 const GROUP_ORDER: Group[] = ["holds", "breaks", "cannot-reproduce", "no-equivalent"];
@@ -21,11 +23,25 @@ const BAR_COLOUR: Record<Group, string> = {
   "no-equivalent": "bg-edge",
 };
 
+/** A model or a stand-in must never read as a measurement (§6), so those
+ * rows carry a tag. Measured rows are the default and stay untagged. */
+const BASIS_TAG: Partial<Record<NonNullable<BreakdownRow["basis"]>, [string, string]>> = {
+  modelled: ["modelled", "This value comes from a model, not a measurement"],
+  proxy: ["stand-in", "Two different measurements standing in for the same property: read it as a guide"],
+};
+
 function Row({ row, group }: { row: BreakdownRow; group: Group }) {
+  const tag = row.basis && row.kind !== "earth_limit" ? BASIS_TAG[row.basis] : undefined;
   return (
     <tr className="border-t border-edge align-top">
       <th scope="row" className="py-2 pr-3 text-left font-medium">
         {row.dimension}
+        {tag && (
+          <span title={tag[1]}
+                className="ml-1.5 rounded border border-edge px-1 py-px align-middle text-[10px] font-normal uppercase tracking-wide text-muted">
+            {tag[0]}
+          </span>
+        )}
         {row.note && <span className="mt-0.5 block text-xs font-normal text-muted">{row.note}</span>}
       </th>
       <td className="py-2 pr-3 tabular-nums">{row.moon}</td>
@@ -53,7 +69,7 @@ function SideBySide({ data }: { data: TwinsResponse }) {
   const earth = asTile(data.earth);
   const moon = asTile(data.moon);
   if (!earth || !moon) return null;
-  const lunar = lunarBodyOf(data.moon);
+  const lunar = sourceBodyOf(data.moon);
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between gap-2">
@@ -81,10 +97,10 @@ function SideBySide({ data }: { data: TwinsResponse }) {
         </div>
         <div>
           <p className="mb-1 text-xs text-muted">
-            {lunar === "moon_polar" ? "Moon south pole" : "Moon"} · {coords(moon.lat, moon.lon)}
+            {BODY_NAME[lunar]} · {coords(moon.lat, moon.lon)}
           </p>
           <TileChip body={lunar} tile={moon} layer={layer} caption
-                    label={`Moon tile near ${coords(moon.lat, moon.lon)}`} />
+                    label={`${WORLD_NAME[lunar]} tile near ${coords(moon.lat, moon.lon)}`} />
         </div>
       </div>
       {lunar === "moon_polar" && layer === "img" && (
@@ -135,12 +151,13 @@ export function FieldTestList({ tests }: { tests: FieldTests }) {
 
 export function ReportCard({ data }: { data: TwinsResponse }) {
   const groups = groupBreakdown(data.breakdown);
+  const world = WORLD_NAME[sourceBodyOf(data.moon)];
   return (
     <section className="p-4" aria-label="Report card">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm uppercase tracking-wide text-muted">Report card</h2>
         {data.model_score != null && (
-          <span className="text-xs text-muted" title="Analog model (#29): how much this Earth tile resembles known Moon analog sites, as a percentile of all Earth tiles">
+          <span className="text-xs text-muted" title={`Analog model (#29): how much this Earth tile resembles known ${world} analog sites, as a percentile of all Earth tiles`}>
             Analog model: <strong className="text-ink">{percent(data.model_score)}</strong> percentile
           </span>
         )}
@@ -159,12 +176,12 @@ export function ReportCard({ data }: { data: TwinsResponse }) {
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[34rem] border-collapse text-sm">
           <caption className="sr-only">
-            Dimension-by-dimension comparison of the lunar tile and the Earth tile
+            Dimension-by-dimension comparison of the {world} tile and the Earth tile
           </caption>
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-muted">
               <th scope="col" className="pb-2 pr-3">Dimension</th>
-              <th scope="col" className="pb-2 pr-3">Moon</th>
+              <th scope="col" className="pb-2 pr-3">{world}</th>
               <th scope="col" className="pb-2 pr-3">Earth</th>
               <th scope="col" className="pb-2">Match</th>
             </tr>
@@ -187,8 +204,11 @@ export function ReportCard({ data }: { data: TwinsResponse }) {
       {data.field_tests && <FieldTestList tests={data.field_tests} />}
 
       <p className="mt-4 text-xs text-muted">
-        Lunar surface temperatures are modelled, not measured. Slope and relief are measured at the
-        same ~1.9 km baseline on both bodies, which is what makes them comparable.
+        {world === "Mars"
+          ? "Mars surface temperatures are modelled, not measured. Rows tagged “stand-in” compare two different measurements, so read them as a guide. "
+          : "Lunar surface temperatures are modelled, not measured. "}
+        Slope and relief are measured at the same ~1.9 km baseline on both bodies, which is what
+        makes them comparable.
       </p>
     </section>
   );

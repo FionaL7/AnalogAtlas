@@ -1,8 +1,8 @@
 /** The analog portfolio (#31): the fewest Earth sites that together cover
- * every dimension of one lunar site. No single site matches on every count,
- * so this shows which site stands in for which part of the Moon. */
+ * every dimension of one Moon or Mars site. No single site matches on every
+ * count, so this shows which site stands in for which part of the target. */
 import { coords, percent } from "../../lib/format";
-import type { PortfolioFile } from "../../lib/types";
+import { WORLD_NAME, type PortfolioFile } from "../../lib/types";
 
 export function Portfolio({ data, siteName }: { data: PortfolioFile; siteName: string }) {
   const label = Object.fromEntries(data.dimensions.map((d) => [d.id, d.label]));
@@ -10,6 +10,7 @@ export function Portfolio({ data, siteName }: { data: PortfolioFile; siteName: s
   const total = data.dimensions.length;
   const covered = total - data.uncovered.length;
   const single = data.best_single_site?.covers;
+  const mars = data.body === "mars";
 
   return (
     <div className="flex flex-col gap-4">
@@ -18,7 +19,9 @@ export function Portfolio({ data, siteName }: { data: PortfolioFile; siteName: s
         <strong className="text-ink">{data.sites.length}</strong> together cover{" "}
         <strong className="text-ink">{covered} of {total}</strong> dimensions
         {single != null && single < total && <>; the best single site covers only {single}</>}.
-        Ice sheets, forests and lakes are never picked.
+        {mars
+          ? "Forests and lakes are never picked; ice only where the Mars site has ground ice."
+          : "Ice sheets, forests and lakes are never picked."}
       </p>
 
       <ol className="grid gap-3 md:grid-cols-2">
@@ -42,7 +45,7 @@ export function Portfolio({ data, siteName }: { data: PortfolioFile; siteName: s
       <table className="w-full max-w-3xl text-left text-sm">
         <thead className="text-xs text-muted">
           <tr><th className="py-1 pr-3 font-normal">Dimension</th>
-              <th className="py-1 pr-3 font-normal">On the Moon</th>
+              <th className="py-1 pr-3 font-normal">On {mars ? "Mars" : `the ${WORLD_NAME[data.body] ?? "Moon"}`}</th>
               <th className="py-1 font-normal">Covered by</th></tr>
         </thead>
         <tbody>

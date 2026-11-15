@@ -12,11 +12,13 @@
  *    positioned and clipped, which is what tiles._fetch_moon does on the server.
  *  - Moon south pole: the same, on Trek's polar stereographic tile tree. Only
  *    hillshade there: the NAC mosaic covers 85.5-90°S and is half dark.
+ *  - Mars: as the Moon, from NASA Mars Trek at zoom 7 (docs/MARS-PLAN.md).
  */
 import {
-  EARTH_TILE_DEG_LAT, MOON_TILE_DEG, MOON_ZOOM, SP_EXTENT_M, SP_ORIGIN_M, TILE_KM, spForward,
+  EARTH_TILE_DEG_LAT, MARS_TILE_DEG, MARS_ZOOM, MOON_TILE_DEG, MOON_ZOOM, SP_EXTENT_M,
+  SP_ORIGIN_M, TILE_KM, spForward,
 } from "./geo";
-import type { Body, Layer } from "./types";
+import type { Body, Layer, SourceBody } from "./types";
 
 const TILE_PX = 256;
 
@@ -29,6 +31,30 @@ const TREK = "https://trek.nasa.gov/tiles/Moon";
 const MOON_LAYERS: Record<Layer, string> = {
   img: `${TREK}/EQ/LRO_WAC_Mosaic_Global_303ppd_v02/1.0.0/default/default028mm/{z}/{y}/{x}.jpg`,
   shade: `${TREK}/EQ/LRO_LOLA_Shade_Global_256ppd_v06/1.0.0/default/default028mm/{z}/{y}/{x}.png`,
+};
+const MARS_TREK = "https://trek.nasa.gov/tiles/Mars/EQ";
+const MARS_LAYERS: Record<Layer, string> = {
+  img: `${MARS_TREK}/Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/default/default028mm/{z}/{y}/{x}.jpg`,
+  shade: `${MARS_TREK}/Mars_MOLA_blend200ppx_HRSC_Shade_clon0dd_200mpp_lzw/1.0.0/default/default028mm/{z}/{y}/{x}.jpg`,
+};
+
+/** One equirectangular Trek tile tree: 2^(z+1) x 2^z tiles of `tileDeg`. */
+interface EqGrid {
+  layers: Record<Layer, string>;
+  zoom: number;
+  tileDeg: number;
+  source: Record<Layer, string>;
+}
+const MOON_GRID: EqGrid = {
+  layers: MOON_LAYERS, zoom: MOON_ZOOM, tileDeg: MOON_TILE_DEG,
+  source: { img: "LROC WAC mosaic, NASA Moon Trek", shade: "LOLA hillshade, NASA Moon Trek" },
+};
+const MARS_GRID: EqGrid = {
+  layers: MARS_LAYERS, zoom: MARS_ZOOM, tileDeg: MARS_TILE_DEG,
+  source: {
+    img: "Viking colour mosaic, NASA Mars Trek",
+    shade: "MOLA and HRSC hillshade, NASA Mars Trek",
+  },
 };
 const POLAR_SHADE =
   `${TREK}/SP/LRO_LOLA_Shade_SPole75_30mp_v04/1.0.0/default/default028mm/{z}/{y}/{x}.png`;
@@ -118,25 +144,21 @@ function piecesFor(
   return out;
 }
 
-function moonChip(t: TileLike, layer: Layer): Chip {
-  // Trek EQ: 2^(z+1) x 2^z tiles of MOON_TILE_DEG. A chip TILE_KM tall spans
+function eqChip(t: TileLike, layer: Layer, g: EqGrid): Chip {
+  // Trek EQ: 2^(z+1) x 2^z tiles of `tileDeg`. A chip one tile tall spans
   // one tile of latitude and 1/cos(lat) tiles of longitude (#27).
-  const dpp = MOON_TILE_DEG / TILE_PX;
-  const halfLat = MOON_TILE_DEG / 2;
+  const dpp = g.tileDeg / TILE_PX;
+  const halfLat = g.tileDeg / 2;
   const halfLon = halfLat / Math.max(Math.cos((t.lat * Math.PI) / 180), 0.05);
-  const across = 2 ** (MOON_ZOOM + 1);
-  const rows = 2 ** MOON_ZOOM;
+  const across = 2 ** (g.zoom + 1);
+  const rows = 2 ** g.zoom;
   const pieces = piecesFor(
     (t.lon - halfLon + 180) / dpp, (t.lon + halfLon + 180) / dpp,
     (90 - (t.lat + halfLat)) / dpp, (90 - (t.lat - halfLat)) / dpp,
     (r, c) => (r < 0 || r >= rows ? null
-      : fill(MOON_LAYERS[layer], MOON_ZOOM, r, ((c % across) + across) % across)),
+      : fill(g.layers[layer], g.zoom, r, ((c % across) + across) % across)),
   );
-  return {
-    pieces,
-    source: layer === "img" ? "LROC WAC mosaic, NASA Moon Trek" : "LOLA hillshade, NASA Moon Trek",
-    layer,
-  };
+  return { pieces, source: g.source[layer], layer };
 }
 
 function polarChip(t: TileLike): Chip {
@@ -160,10 +182,12 @@ function polarChip(t: TileLike): Chip {
 export function chipFor(body: Body, tile: TileLike, layer: Layer = "img"): Chip {
   if (body === "earth") return earthChip(tile, layer);
   if (body === "moon_polar") return polarChip(tile);
-  return moonChip(tile, layer);
+  return eqChip(tile, layer, body === "mars" ? MARS_GRID : MOON_GRID);
 }
 
-/** Which body a report card's lunar record belongs to. */
-export const lunarBodyOf = (rec: Record<string, unknown>): Body =>
-  typeof rec.x_m === "number" || String(rec.tile_id ?? "").startsWith("moonsp_")
-    ? "moon_polar" : "moon";
+/** Which body a report card's source record (`TwinsResponse.moon`) belongs to. */
+export const sourceBodyOf = (rec: Record<string, unknown>): SourceBody => {
+  const id = String(rec.tile_id ?? "");
+  if (rec.body === "mars" || id.startsWith("mars_")) return "mars";
+  return typeof rec.x_m === "number" || id.startsWith("moonsp_") ? "moon_polar" : "moon";
+};

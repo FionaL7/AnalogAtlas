@@ -6,7 +6,19 @@
  *  (#26). It is a separate body, not a subset of `moon`: an equirectangular
  *  tile at 85°S is 6 km wide and 85 km tall, so the pole cannot be drawn or
  *  indexed on the same grid. */
-export type Body = "moon" | "moon_polar" | "earth";
+export type Body = "moon" | "moon_polar" | "mars" | "earth";
+/** A body Earth is compared with: the two lunar indexes and Mars. */
+export type SourceBody = Exclude<Body, "earth">;
+export const SOURCE_BODIES: readonly SourceBody[] = ["moon", "moon_polar", "mars"];
+
+/** Full name, for headings and labels. */
+export const BODY_NAME: Record<Body, string> = {
+  moon: "Moon", moon_polar: "Moon south pole", mars: "Mars", earth: "Earth",
+};
+/** The world a body belongs to: both lunar indexes are "Moon". */
+export const WORLD_NAME: Record<Body, string> = {
+  moon: "Moon", moon_polar: "Moon", mars: "Mars", earth: "Earth",
+};
 export type Layer = "img" | "shade";
 
 /** Bodies drawn in a polar stereographic pane rather than in lat/lon. */
@@ -38,6 +50,8 @@ export interface SearchResponse {
 
 export interface AnalogsRequest {
   src_body: Body;
+  /** Earth sources only: which world to find terrain on. Default `moon`. */
+  dst_body?: SourceBody;
   lat: number;
   lon: number;
   k?: number;
@@ -62,6 +76,7 @@ export interface AnalogsResponse {
 /** One row of the report card: a dimension, and whether the analogy holds. */
 export interface BreakdownRow {
   dimension: string;
+  /** The source-body value, whatever the body: the Moon's or Mars's. */
   moon: string | number;
   earth: string | number;
   /** 0-1, or null when Earth has no equivalent at all. */
@@ -69,6 +84,9 @@ export interface BreakdownRow {
   note: string;
   /** How to group the row. `earth_limit` = Earth cannot reproduce this (always match 0). */
   kind?: "compare" | "no_equivalent" | "earth_limit";
+  /** Where the source-body value comes from. `proxy`: two different
+   *  quantities standing in for the same property. Absent on older exports. */
+  basis?: "measured" | "modelled" | "proxy";
 }
 
 /** One suggestion from analogatlas/fieldtest.py (C6). */
@@ -118,6 +136,12 @@ export interface TileCell {
   avg_illum?: number | null;
   illum_max?: number | null;
   earth_vis?: number | null;
+  /** mars only (docs/MARS-PLAN.md contract). */
+  thermal_inertia?: number | null;
+  albedo?: number | null;
+  dust_index?: number | null;
+  weh_pct?: number | null;
+  hydrous_count?: number | null;
 }
 
 /** Static export: sites.json (§4.2). */
