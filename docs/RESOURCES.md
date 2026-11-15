@@ -64,6 +64,7 @@ Free tools for Space Apps participants: [Global Offers](https://www.spaceappscha
 | ASTER GDEM hillshade, Blue Marble | Earth | NASA Worldview / GIBS | Terrain-shape and image embeddings | 2,294 fallback tiles |
 | NASA POWER climatology | Earth | [NASA POWER API](https://power.larc.nasa.gov/) | Temperature, precipitation, irradiance | Live API, nothing to download |
 | ALOS PALSAR | Earth | JAXA G-Portal | L-band radar, shallow subsurface | Optional |
+| Robbins (2019) crater database, D ≥ 1 km (1,296,796 craters) | Moon | [USGS Astrogeology, Moon Crater Database v1](https://astrogeology.usgs.gov/search/map/moon_crater_database_v1_robbins) ([JGR paper](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2018JE005592)) | **Validation only** (#16): held-out crater labels for precision@k. Never a search feature | Downloaded, labels in `data/index/{body}_craters.parquet` |
 | Mars maps (MOLA, CTX) | Mars | [USGS Astrogeology: Interactive Maps: Mars](https://astrogeology-usgs.hub.arcgis.com/pages/interactive-maps-mars) | Mars extension | Only if we expand Mars; the page needs a browser to render |
 
 Download URLs for the raw rasters are in the [README](../README.md).

@@ -70,6 +70,14 @@ For the south pole (`moon_polar`, [#26](https://github.com/FionaL7/AnalogAtlas/i
 
 The PGDA files download from `imbrium.mit.edu`; the links on the product page are the reliable ones.
 
+For validation ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)) — only needed to re-run `scripts/05_validate.py`. The labels it derives are saved to `data/index/{body}_craters.parquet`, so a machine that has the index does not need this download:
+
+| File | Size | Source |
+| --- | --- | --- |
+| `robbins/lunar_crater_database_robbins_2018.csv` | 92 MB zipped, 227 MB unpacked | [USGS Astrogeology — Moon Crater Database v1 (Robbins)](https://astrogeology.usgs.gov/search/map/moon_crater_database_v1_robbins) ([direct zip](https://astrogeology.usgs.gov/ckan/dataset/f89f5478-b69a-486c-b9b5-30d7b0c5ad2b/resource/c4f25cc2-4f8a-4207-a845-5e176da3ac5a/download/lunar_crater_database_robbins_2018)) |
+
+Unpack the bundle's `data/*.csv` straight into `data/raw/robbins/`. It holds 1,296,796 craters with D ≥ 1 km; `analogatlas/craters.py` reads three of its columns.
+
 Exact filenames are set in [`analogatlas/config.py`](analogatlas/config.py). LOLA LDEM_16 (1.9 km/px) and ETOPO 60s (1.85 km/px) sample at nearly the same resolution, which is what makes slope and relief comparable between the two bodies. The polar DEM is finer (240 m/px) and is block-averaged to 1.92 km before slope is measured, so it lands on the same baseline.
 
 ## Outputs
@@ -78,6 +86,8 @@ Exact filenames are set in [`analogatlas/config.py`](analogatlas/config.py). LOL
 
 - `{body}_meta.parquet` — one row per tile: coordinates and physical features
 - `{body}_img.npy`, `{body}_shade.npy` — `(N, 512)` float16 CLIP embeddings, row-aligned with the parquet
+- `{body}_craters.parquet` — Robbins crater labels per lunar tile, for validation only ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)); never a search feature
+- `validation.json` — how the search scores against independent data: crater retrieval, where each known analog ranks for its role, and the hold-one-out model check
 
 `body` is `moon`, `moon_polar` or `earth`. `moon_polar` is the lunar south pole on its own polar stereographic grid: past ~60° an equirectangular tile stops being square on the ground, so the pole cannot share the `moon` grid.
 
