@@ -70,6 +70,19 @@ For the south pole (`moon_polar`, [#26](https://github.com/FionaL7/AnalogAtlas/i
 
 The PGDA files download from `imbrium.mit.edu`; the links on the product page are the reliable ones.
 
+For Mars (`mars`, [#38](https://github.com/FionaL7/AnalogAtlas/issues/38)) — ~2.3 GB total:
+
+| File | Size | Source |
+| --- | --- | --- |
+| `Mars_MGS_MOLA_DEM_mosaic_global_463m.tif` | 2.1 GB | [USGS Astrogeology — MOLA DEM mosaic, 463 m](https://planetarymaps.usgs.gov/mosaic/Mars_MGS_MOLA_DEM_mosaic_global_463m.tif) |
+| `Mars_MGS_TES_Albedo_mosaic_global_7410m.tif` | 17 MB | [USGS Astrogeology — TES albedo mosaic](https://planetarymaps.usgs.gov/mosaic/Mars_MGS_TES_Albedo_mosaic_global_7410m.tif) |
+| `tes_ruffdust.png` | 30 MB | [ASU — TES dust cover index (coloured rendering)](https://www.mars.asu.edu/data/tes_ruffdust/large/tes_ruffdust.png); decoded to a relative 0–1 index by hue |
+| `tes_ti_putzig2007_20ppd.npy` | 52 MB | Assembled by `rasters.fetch_tes_ti()` from the [JMARS WMS](http://ms-mars.mars.asu.edu/tes_nightside_ti_putzig_2007?SERVICE=WMS&REQUEST=GetCapabilities) (the ASU `NBmap2007.tif` is only a coloured rendering) |
+| `h2o_sr_5x5.tab` | 100 KB | [PDS Geosciences — Odyssey GRS water-equivalent hydrogen, 5° bins](https://pds-geosciences.wustl.edu/ody/ody-m-grs-5-elements-v1/odgm_xxxx/data/smoothed/h2o_sr_5x5.tab) |
+| `hydrous_crism.json` | 125 KB | Trek feature service `Hydrous_Mineral_Detections_CRISM_clon0` — down on 15 Nov 2026; `hydrous_count` stays NaN without it |
+
+MOLA at 463 m is block-averaged ×4 to ~1.85 km before slope is measured, the same baseline as the Moon and Earth.
+
 For validation ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)) — only needed to re-run `scripts/05_validate.py`. The labels it derives are saved to `data/index/{body}_craters.parquet`, so a machine that has the index does not need this download:
 
 | File | Size | Source |

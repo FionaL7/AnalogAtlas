@@ -3,6 +3,7 @@
     python scripts/02_features.py            # every body
     python scripts/02_features.py earth      # one body
     python scripts/02_features.py moon_polar # the south pole (#26)
+    python scripts/02_features.py mars       # Mars (#38)
     python scripts/02_features.py earth --meta-only   # redo features, keep embeddings
 
 Writes data/index/{body}_meta.parquet, {body}_shade.npy, {body}_img.npy
@@ -46,7 +47,7 @@ def embed_all(paths, shade):
 
 
 PHYSICAL = {"moon": rasters.moon_physical, "moon_polar": rasters.moon_polar_physical,
-            "earth": rasters.earth_physical}
+            "mars": rasters.mars_physical, "earth": rasters.earth_physical}
 
 
 def has_content(paths, min_frac=0.05):

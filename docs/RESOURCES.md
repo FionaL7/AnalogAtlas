@@ -65,6 +65,12 @@ Free tools for Space Apps participants: [Global Offers](https://www.spaceappscha
 | NASA POWER climatology | Earth | [NASA POWER API](https://power.larc.nasa.gov/) | Temperature, precipitation, irradiance | Live API, nothing to download |
 | ALOS PALSAR | Earth | JAXA G-Portal | L-band radar, shallow subsurface | Optional |
 | Robbins (2019) crater database, D ≥ 1 km (1,296,796 craters) | Moon | [USGS Astrogeology, Moon Crater Database v1](https://astrogeology.usgs.gov/search/map/moon_crater_database_v1_robbins) ([JGR paper](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2018JE005592)) | **Validation only** (#16): held-out crater labels for precision@k. Never a search feature | Downloaded, labels in `data/index/{body}_craters.parquet` |
-| Mars maps (MOLA, CTX) | Mars | [USGS Astrogeology: Interactive Maps: Mars](https://astrogeology-usgs.hub.arcgis.com/pages/interactive-maps-mars) | Mars extension | Only if we expand Mars; the page needs a browser to render |
+| MOLA/HRSC blended hillshade, Viking MDIM 2.1 colour (tiles) | Mars | [NASA Mars Trek](https://trek.nasa.gov/mars/) | Terrain-shape and image embeddings (#37) | On disk, on the `data` release |
+| MOLA DEM mosaic, 463 m | Mars | [USGS Astrogeology](https://planetarymaps.usgs.gov/mosaic/Mars_MGS_MOLA_DEM_mosaic_global_463m.tif) | Slope, relief, elevation at the shared ~1.85 km baseline | On disk |
+| TES nightside thermal inertia (Putzig 2007, 20 ppd) | Mars | ASU JMARS WMS, assembled by `rasters.fetch_tes_ti()` | Surface material: dust vs sand vs rock | On disk |
+| TES albedo mosaic, 8 ppd | Mars | USGS Astrogeology | Albedo; input to the modelled temperatures | On disk |
+| TES dust cover index | Mars | [ASU](https://www.mars.asu.edu/data/tes_ruffdust/) (coloured PNG, decoded by hue to a **relative** 0–1 index) | Dust cover | On disk |
+| Odyssey GRS water-equivalent hydrogen, 5° | Mars | PDS Geosciences | Ground ice / water, **regional context only** (~300 km bins) | On disk |
+| CRISM/OMEGA hydrous mineral detections | Mars | Trek feature service `Hydrous_Mineral_Detections_CRISM_clon0` | Water-altered minerals per tile | Service down 15 Nov 2026; `hydrous_count` NaN until it returns |
 
 Download URLs for the raw rasters are in the [README](../README.md).

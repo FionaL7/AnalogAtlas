@@ -88,6 +88,19 @@ LPSR = RAW / "LPSR_75S_120M_201608.IMG"                      # permanent shadow
 AVG_ILLUM = RAW / "AVGVISIB_75S_120M_201608.IMG"             # mean solar illumination
 EARTH_VIS = RAW / "AVGVISIB_75S_120M_201608_EARTH.IMG"       # mean Earth visibility
 
+# ---- Mars rasters (#38) ----------------------------------------------------
+MOLA_DEM = RAW / "Mars_MGS_MOLA_DEM_mosaic_global_463m.tif"
+TES_ALBEDO = RAW / "Mars_MGS_TES_Albedo_mosaic_global_7410m.tif"
+TES_DUST = RAW / "tes_ruffdust.png"           # coloured PNG, decoded by hue
+GRS_H2O = RAW / "h2o_sr_5x5.tab"              # 5-deg bins, wt% H2O
+# Numeric Putzig 2007 nightside thermal inertia, assembled from the JMARS WMS
+# by rasters.fetch_tes_ti() (the ASU NBmap2007.tif is a coloured rendering).
+TES_TI = RAW / "tes_ti_putzig2007_20ppd.npy"
+TES_TI_WMS = "http://ms-mars.mars.asu.edu/tes_nightside_ti_putzig_2007"
+# CRISM/OMEGA hydrous-mineral detection points, dumped from the Trek feature
+# service. The service was down on 15 Nov 2026; hydrous_count is NaN without it.
+CRISM_HYDROUS = RAW / "hydrous_crism.json"
+
 # ---- Model -----------------------------------------------------------------
 CLIP_ARCH = "ViT-B-32"
 CLIP_WEIGHTS = "laion2b_s34b_b79k"

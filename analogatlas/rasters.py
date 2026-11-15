@@ -212,6 +212,177 @@ def lunar_temperature_model(lat: float) -> dict:
     return dict(t_max_k=t_max, t_min_k=t_min)
 
 
+# --------------------------------------------------------------- Mars ------
+def _eq_window(a: np.ndarray, lat_min, lat_max, lon_min, lon_max) -> np.ndarray:
+    """Slice a global equirectangular array (row 0 = 90 N, col 0 = 180 W).
+
+    Longitude wraps, so tiles touching the +/-180 seam get a full window
+    rather than the clipped one PDSCyl settles for.
+    """
+    ppd_y, ppd_x = a.shape[0] / 180.0, a.shape[1] / 360.0
+    r0 = max(int(math.floor((90 - lat_max) * ppd_y)), 0)
+    r1 = min(int(math.ceil((90 - lat_min) * ppd_y)), a.shape[0])
+    c0 = int(math.floor(((lon_min + 180) % 360) * ppd_x))
+    w = max(int(math.ceil((lon_max - lon_min) * ppd_x)), 1)
+    return a[r0:r1][:, np.arange(c0, c0 + w) % a.shape[1]]
+
+
+def fetch_tes_ti() -> None:
+    """Assemble the numeric Putzig 2007 nightside TI map (20 ppd, int16,
+    J m-2 K-1 s-1/2) from the JMARS WMS, which rejects one whole-globe
+    request as CanvasTooBig. The downloadable NBmap2007.tif is only a
+    coloured rendering, so the WMS is the actual data source."""
+    if C.TES_TI.exists():
+        return
+    import requests
+    out = np.zeros((3600, 7200), "<i2")
+    for i, lon0 in enumerate(range(0, 360, 90)):
+        for j, lat_top in enumerate((90, 0)):
+            # the ASU server never URL-decodes, so FORMAT=image%2Fvicar fails:
+            # the query has to go up verbatim. It also streams with no
+            # Content-Length, so a dropped connection looks like success --
+            # check the byte count ourselves and retry.
+            url = (f"{C.TES_TI_WMS}?SERVICE=WMS&REQUEST=GetMap&FORMAT=image/vicar"
+                   f"&WIDTH=1800&HEIGHT=1800&SRS=JMARS:4&STYLES=&VERSION=1.1.1"
+                   f"&BBOX={lon0},{lat_top - 90},{lon0 + 90},{lat_top}"
+                   f"&LAYERS=tes_nightside_ti_putzig_2007")
+            for attempt in range(4):
+                r = requests.get(url, timeout=300)
+                r.raise_for_status()
+                m = re.match(rb"LBLSIZE=(\d+)", r.content)
+                if m and len(r.content) == int(m.group(1)) + 1800 * 1800 * 2:
+                    break
+            else:
+                raise RuntimeError(f"WMS kept truncating: {r.content[:120]!r}")
+            chunk = np.frombuffer(r.content[int(m.group(1)):], "<i2")
+            out[j * 1800:(j + 1) * 1800, i * 1800:(i + 1) * 1800] = chunk.reshape(1800, 1800)
+    np.save(C.TES_TI, np.roll(out, 3600, axis=1))   # lon 0..360 -> -180..180
+
+
+def _decode_dust(path: Path) -> np.ndarray:
+    """Relative dust cover from the TES dust PNG, decoded by hue.
+
+    The published raster is a colour rendering (blue = dust-free, red =
+    dust-covered) over a grey hillshade. Grey (unsaturated) pixels carry no
+    data. The result is a RELATIVE 0..1 index, 1 = dustiest; the DCI values
+    themselves are not recoverable from the image.
+    """
+    from PIL import Image
+    a = np.asarray(Image.open(path).convert("RGB"), np.float32) / 255
+    mx, mn = a.max(-1), a.min(-1)
+    spread = mx - mn
+    r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    s = np.where(spread == 0, 1, spread)
+    hue = np.select(                                  # 0 = red, 2/3 = blue
+        [mx == r, mx == g], [((g - b) / s) % 6, (b - r) / s + 2], (r - g) / s + 4) / 6
+    sat = spread / np.where(mx == 0, 1, mx)
+    return np.where(sat < 0.25, np.nan, 1 - np.clip(hue / (2 / 3), 0, 1))
+
+
+def _grs_weh(path: Path) -> np.ndarray:
+    """GRS water-equivalent hydrogen into a 36 x 72 global array, wt%."""
+    t = pd.read_csv(path, sep=r"\s+", header=None, usecols=[0, 1, 2],
+                    names=["lat", "lon_e", "wt"])
+    t.loc[t.wt > 9000, "wt"] = np.nan
+    a = np.full((36, 72), np.nan, np.float32)
+    rows = ((87.5 - t.lat) / 5).round().astype(int)
+    cols = (((t.lon_e + 180) % 360 - 2.5) / 5).round().astype(int)
+    a[rows, cols] = t.wt
+    return a
+
+
+def _crism_counts(grid: pd.DataFrame) -> np.ndarray | None:
+    """Hydrous-mineral detections per tile, if the Trek point dump exists."""
+    if not C.CRISM_HYDROUS.exists():
+        return None
+    import json
+    feats = json.loads(C.CRISM_HYDROUS.read_text())["features"]
+    pts = [(f["geometry"]["y"], f["geometry"]["x"]) if "geometry" in f
+           else (f["lat"], f["lon"]) for f in feats]
+    lat = np.array([p[0] for p in pts])
+    lon = (np.array([p[1] for p in pts]) + 180) % 360 - 180
+    counts = np.zeros(len(grid))
+    for i, r in enumerate(grid.itertuples()):
+        counts[i] = int(((lat >= r.lat_min) & (lat < r.lat_max)
+                         & (lon >= r.lon_min) & (lon < r.lon_max)).sum())
+    return counts
+
+
+# CO2 condenses at ~148 K at Mars surface pressure: nothing radiates below it.
+MARS_CO2_FROST_K = 148.0
+MARS_SOLAR_WM2 = 589.0
+
+
+def mars_temperature_model(lat: float, albedo: float, ti: float) -> dict:
+    """Surface extremes, modelled as on the Moon but with measured inputs:
+    noon from radiative balance with the tile's own albedo (the 6 mbar CO2
+    atmosphere moves it only a few K), pre-dawn from thermal inertia -- rock
+    (TI ~600) coasts through the night near 200 K at the equator, dust
+    (TI ~50) falls towards the CO2 frost point. Consistent with TES/MCS
+    climatology; labelled modelled in the report card."""
+    c = max(math.cos(math.radians(lat)), 0.0)
+    a = albedo if np.isfinite(albedo) else 0.22
+    t_max = (MARS_SOLAR_WM2 * (1 - a) * c / 5.670e-8) ** 0.25
+    f = math.sqrt(np.clip((ti - 30.0) / 570.0, 0.0, 1.0)) if np.isfinite(ti) else 0.5
+    t_min = max(MARS_CO2_FROST_K, (145.0 + 55.0 * f) * c ** 0.25)
+    return dict(t_max_k=float(max(t_max, MARS_CO2_FROST_K)), t_min_k=float(t_min))
+
+
+# MOLA at 463 m is block-averaged x4 to ~1.85 km, the slope baseline every
+# body shares (LOLA LDEM_16 1.9 km, Copernicus DEM resampled to 1.85 km).
+MOLA_SLOPE_BLOCK = 4
+
+
+def mars_physical(grid: pd.DataFrame) -> pd.DataFrame:
+    """Terrain from MOLA plus the Mars-only surface dimensions per tile."""
+    import rasterio
+
+    fetch_tes_ti()
+    ti = np.load(C.TES_TI).astype(np.float32)
+    ti[ti <= 0] = np.nan
+    with rasterio.open(C.TES_ALBEDO) as ds:
+        alb = ds.read(1).astype(np.float32)
+        alb[alb == ds.nodata] = np.nan
+    dust = _decode_dust(C.TES_DUST)
+    weh = _grs_weh(C.GRS_H2O)
+    hydrous = _crism_counts(grid)
+
+    dem = rasterio.open(C.MOLA_DEM)
+    ppd = dem.width / 360.0
+    m_per_deg = C.MARS_KM_PER_DEG * 1000
+
+    def dem_window(r) -> np.ndarray:
+        r0 = max(int(math.floor((90 - r.lat_max) * ppd)), 0)
+        r1 = min(int(math.ceil((90 - r.lat_min) * ppd)), dem.height)
+        c0 = int(math.floor(((r.lon_min + 180) % 360) * ppd))
+        w = int(math.ceil((r.lon_max - r.lon_min) * ppd))
+        if c0 + w <= dem.width:
+            a = dem.read(1, window=((r0, r1), (c0, c0 + w)))
+        else:                                        # tile crosses the 180 seam
+            a = np.concatenate([dem.read(1, window=((r0, r1), (c0, dem.width))),
+                                dem.read(1, window=((r0, r1), (0, c0 + w - dem.width)))], 1)
+        a = a.astype(np.float32)
+        if dem.nodata is not None:
+            a[a == dem.nodata] = np.nan
+        return a
+
+    out = []
+    for r in tqdm(grid.itertuples(), total=len(grid), desc="mars physical"):
+        box = (r.lat_min, r.lat_max, r.lon_min, r.lon_max)
+        d = terrain_stats(_block_mean(dem_window(r), MOLA_SLOPE_BLOCK), r.lat,
+                          m_per_deg, ppd / MOLA_SLOPE_BLOCK)
+        with np.errstate(all="ignore"):
+            d["thermal_inertia"] = float(np.nanmean(_eq_window(ti, *box)))
+            d["albedo"] = float(np.nanmean(_eq_window(alb, *box)))
+            d["dust_index"] = float(np.nanmean(_eq_window(dust, *box)))
+            d["weh_pct"] = float(np.nanmean(_eq_window(weh, *box)))
+        d["hydrous_count"] = np.nan if hydrous is None else hydrous[r.Index]
+        d.update(mars_temperature_model(r.lat, d["albedo"], d["thermal_inertia"]))
+        out.append(d)
+    dem.close()
+    return pd.concat([grid.reset_index(drop=True), pd.DataFrame(out)], axis=1)
+
+
 def earth_physical(grid: pd.DataFrame) -> pd.DataFrame:
     if C.EE_PROJECT:
         from . import earth_ee
