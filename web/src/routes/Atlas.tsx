@@ -314,7 +314,7 @@ export function Atlas() {
                  title={api.isLive() ? undefined : "Needs the API: the static export is precomputed at the Balanced setting"}>
               <span id="rank-by" className="uppercase tracking-wide">Rank matches by</span>
               <div role="radiogroup" aria-labelledby="rank-by"
-                   className="flex overflow-hidden rounded border border-edge text-sm">
+                   className="flex self-start overflow-hidden rounded border border-edge text-sm">
                 {RANK_MODES.map((m) => {
                   const on = wPhys === m.w;
                   return (
