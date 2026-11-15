@@ -89,9 +89,11 @@ Stack, pages, user flows, the API/data contract and repo layout are in [ARCHITEC
 
 Code: [FionaL7/AnalogAtlas](https://github.com/FionaL7/AnalogAtlas), branch `main`. Repo layout and what each piece does: [ARCHITECTURE.md](ARCHITECTURE.md#5-repo-layout).
 
-Git ignores `data/` and `.venv/`, so each developer rebuilds them on their own machine.
+Git ignores `data/` and `.venv/`. The shared copy of `data/` is on the GitHub Release [`data`](https://github.com/FionaL7/AnalogAtlas/releases/tag/data) ([#8](https://github.com/FionaL7/AnalogAtlas/issues/8)). Skill: [data-sync](../.claude/skills/data-sync/SKILL.md).
 
 ### Setup on a new machine
+
+**Quick path:** set up the venv (below), then `python scripts/data.py pull` downloads `data/index/`, which is all the API needs. Add `raw tiles` to get the rasters and tiles too. Only rebuild with the steps below when you change the pipeline, then `python scripts/data.py push <folder>`.
 
 Put the raw rasters in `data/raw/` first — download URLs, sizes and the `.lbl` gotcha are in the [README](../README.md#raw-data). PyTorch picks the device: Apple GPU (MPS) on a Mac, CUDA on an NVIDIA GPU, otherwise CPU (slower, but fine for 5k tiles).
 
@@ -166,6 +168,7 @@ The next milestone is the Earth index. Every Earth–Moon feature in the app dep
   - Set up later today, under [#21](https://github.com/FionaL7/AnalogAtlas/issues/21).
   - Still to settle then: frontend host (Firebase Hosting or Vercel) and the CD pipeline.
 
+- **Sharing `data/`: GitHub Release files** ([#8](https://github.com/FionaL7/AnalogAtlas/issues/8)), release tag `data`. Free, `gh` already works on every device, 2 GB per file. `python scripts/data.py pull|push`. The last push of a file wins.
 - **Map library: Leaflet** (react-leaflet), one map per body in EPSG:4326 ([#24](https://github.com/FionaL7/AnalogAtlas/issues/24)). Trek and GIBS tiles are plain lat/lon, which Leaflet renders natively; MapLibre only does Web Mercator or globe. The polar pane uses a custom Leaflet CRS in `web/src/lib/polar.ts` — **no proj4leaflet**: the spherical stereographic forward/inverse is six lines and Leaflet takes a custom CRS directly.
 - **South pole: core scope** ([#6](https://github.com/FionaL7/AnalogAtlas/issues/6), built in [#26](https://github.com/FionaL7/AnalogAtlas/issues/26)). It is a separate body, `moon_polar`, on a south polar stereographic grid — not a wider `moon`. Past ~60° an equirectangular tile stops being square on the ground (at 85°S it is 6 km wide and 85 km tall) and the imagery comes back as horizontal smear, so raising `MOON_MAX_ABS_LAT` produces confident nonsense rather than coverage. This is the same split every lunar data set makes, and why the Diviner cylindrical products stop at ±60.
 

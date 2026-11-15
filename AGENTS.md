@@ -93,4 +93,8 @@ If a task, requirement or decision is unclear, ask a human before acting. If oth
 
 ## Data
 
-Large data files aren't in git. How to share them is **not decided yet**; see [docs/PLAN.md](docs/PLAN.md#open-decisions).
+Large data files aren't in git. They're shared as files on the GitHub Release `data`:
+
+- Download: `python scripts/data.py pull` (index only), or `pull all`.
+- After you rebuild something in `data/`: `python scripts/data.py push <folder or file>`, then post on the Team log.
+- Details: skill [data-sync](.claude/skills/data-sync/SKILL.md).
