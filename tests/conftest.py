@@ -94,7 +94,7 @@ def _mars_meta(rng: np.random.Generator) -> pd.DataFrame:
         slope_p90=rng.uniform(1, 25, n),
         thermal_inertia=rng.uniform(40, 600, n),
         albedo=rng.uniform(0.1, 0.3, n),
-        dust_index=rng.uniform(0.93, 0.98, n),
+        dust_index=rng.uniform(0, 1, n),       # relative, 1 = dustiest (#38)
         weh_pct=np.concatenate([[9.0], rng.uniform(2, 5, n - 1)]),
         hydrous_count=np.concatenate([[0, 3], np.zeros(n - 2, dtype=int)]),
         t_max_k=rng.uniform(250, 290, n),

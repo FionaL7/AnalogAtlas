@@ -163,11 +163,18 @@ def build_dimensions(moon: analog.BodyIndex, earth: analog.BodyIndex,
         polar_rows = analog.breakdown(polar.meta.iloc[0], earth_row, climate).assign(world="moon")
         rows = pd.concat([rows, polar_rows])
     if mars is not None:
-        # Mars rows depend on the tile (ground ice, minerals), so take them
-        # from every Mars tile until each row has been seen once
-        for i in range(len(mars.meta)):
-            mars_rows = analog.breakdown(mars.meta.iloc[i], earth_row, climate).assign(world="mars")
-            rows = pd.concat([rows, mars_rows])
+        # Some Mars rows depend on the tile (ground ice, minerals), so take
+        # them from a few tiles that between them show every row: one
+        # ice-rich, one not, and one with mineral detections if any has them.
+        m = mars.meta
+        picks = [m.index[0]]
+        ice = m.lat.abs() >= analog.MARS_ICE_LAT
+        picks += [m.index[ice.to_numpy()][0]] if ice.any() else []
+        picks += [m.index[(~ice).to_numpy()][0]] if (~ice).any() else []
+        if "hydrous_count" in m and (m.hydrous_count > 0).any():
+            picks.append(m.index[(m.hydrous_count > 0).to_numpy()][0])
+        rows = pd.concat([rows] + [analog.breakdown(m.loc[k], earth_row, climate).assign(world="mars")
+                                   for k in dict.fromkeys(picks)])
     worlds = rows.groupby("dimension", sort=False).world.agg(lambda w: sorted(set(w)))
     rows = rows.drop_duplicates(subset="dimension")
     out = []

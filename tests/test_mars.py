@@ -33,7 +33,7 @@ def _mars(lat=10.0, weh=3.0, **extra) -> BodyIndex:
     meta = pd.DataFrame(dict(
         tile_id=["mars_7_1_1"], body=["mars"], lat=[lat], lon=[20.0],
         slope_med=[2.0], relief_km=[1.0], thermal_inertia=[80.0], albedo=[0.28],
-        dust_index=[0.935], weh_pct=[weh], hydrous_count=[2],
+        dust_index=[0.9], weh_pct=[weh], hydrous_count=[2],
         t_max_k=[280.0], t_min_k=[180.0]))
     for k, v in extra.items():
         meta[k] = [v]
@@ -248,3 +248,29 @@ def test_synthetic_mars_index_runs_end_to_end(tmp_path, monkeypatch):
     assert {"compare", "no_equivalent", "earth_limit"} == set(rows.kind)
     assert set(rows.basis) <= {"measured", "modelled", "proxy"}
     assert build_portfolio(mars, 1, earth)["sites"]
+
+
+def test_mid_latitude_ice_sites_are_ice_rich_without_hydrogen():
+    """GRS hydrogen is missing or under 6% at Arcadia, Deuteronilus and Utopia,
+    yet those are the ice landing sites: latitude decides (#42)."""
+    from analogatlas.sites import MARS_SITES
+    for name in ("Arcadia Planitia", "Deuteronilus Mensae", "Utopia Planitia"):
+        lat, _ = MARS_SITES[name]
+        assert mars_ice_rich(_mars(lat=lat, weh=float("nan")).meta.iloc[0]), name
+    for name in ("Jezero crater", "Gale crater", "Oxia Planum", "Medusae Fossae"):
+        lat, _ = MARS_SITES[name]
+        assert not mars_ice_rich(_mars(lat=lat, weh=9.0).meta.iloc[0]), name
+
+
+def test_ground_ice_row_is_modelled_and_hydrogen_stays_as_context():
+    rows = _rows(_mars(lat=48.0, weh=4.0), _earth(), "e_glacier")
+    assert rows["Ground ice"]["basis"] == "modelled"
+    assert "not measured in this tile" in rows["Ground ice"]["note"]
+    assert rows["Near-surface water"]["kind"] == "no_equivalent"
+
+
+def test_dust_index_is_relative_dustiness():
+    dusty = _rows(_mars(dust_index=0.95), _earth(), "e_dusty")["Dust"]
+    clear = _rows(_mars(dust_index=0.05), _earth(), "e_dusty")["Dust"]
+    assert dusty["match"] > 0.9 > clear["match"]
+    assert dusty["moon"].startswith("dust-covered") and clear["moon"].startswith("mostly dust-free")
