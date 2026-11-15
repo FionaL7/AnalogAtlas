@@ -1,6 +1,6 @@
 # AnalogAtlas — Plan & Status
 
-As of 14 Nov 2026. Related docs:
+As of 15 Nov 2026. Related docs:
 - [BRIEF.md](BRIEF.md): the challenge text
 - [REQUIREMENTS.md](REQUIREMENTS.md): requirements and the submission checklist
 - [RESOURCES.md](RESOURCES.md): data sources
@@ -28,7 +28,7 @@ Scope: the Moon first, then Mars as a full second body. Plan: [MARS-PLAN.md](MAR
 
 ## Status
 
-Search works end to end on real data: Moon, south pole and Earth indexes, the API, the static export and the app. Mars is planned, not built: [MARS-PLAN.md](MARS-PLAN.md), tasks under the `mars` label.
+Search works end to end on real data on all four bodies: Moon, south pole, Mars and Earth indexes, the API, the static export and the app. The Mars build ([MARS-PLAN.md](MARS-PLAN.md)) is done except B3 (sites/export/API wiring, in progress) and the C1 stretch items.
 
 | Piece | State | Notes |
 | --- | --- | --- |
@@ -45,7 +45,9 @@ Search works end to end on real data: Moon, south pole and Earth indexes, the AP
 | React frontend | Done | Atlas (site, map-click and text/picture search, report card with tile pictures and field tests), field guides, discoveries, traps, methodology with validation, data and credits ([#34](https://github.com/FionaL7/AnalogAtlas/issues/34)) |
 | Radar close study | Done | Mini-RF CPR for every lunar site (`radar.json`). 3 new pairs measured up close: radar on both bodies, 30 m slope, Sentinel-2 picture, full report card, page at `/close-study/:id`. Pairs and why: `analogatlas/closestudy.py` ([#19](https://github.com/FionaL7/AnalogAtlas/issues/19)) |
 | Validation | Done | Crater retrieval against the held-out Robbins catalog, and each known analog's rank for its role, both in `validation.json` and on the methodology page. `scripts/05_validate.py` ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)) |
-| Mars | Planned | Global `mars` index, 7 landing sites, report card, validation. Plan and tasks: [MARS-PLAN.md](MARS-PLAN.md) |
+| Mars tiles + index | Done | 22,016 Trek zoom-7 tiles (±60°), MOLA/TES/GRS physical features, CLIP embeddings; on the `data` release ([#37](https://github.com/FionaL7/AnalogAtlas/issues/37), [#38](https://github.com/FionaL7/AnalogAtlas/issues/38)). `hydrous_count` NaN until the Trek feature service returns |
+| Mars scoring + app | Done / B3 in progress | Scoring, report card and traps ([#44](https://github.com/FionaL7/AnalogAtlas/issues/44)); web app on mocks ([#41](https://github.com/FionaL7/AnalogAtlas/issues/41)); sites, export and API wiring in progress ([#42](https://github.com/FionaL7/AnalogAtlas/issues/42)) |
+| Mars validation | Done | Known-analog ranking from Mars sites: median top 2.57% over 28 analogs (10 in top 1%). Trap rate 57.7%. Shade-only visual channel confirmed best. A3 columns help modestly (top-10% hits 18/28 vs 15/28). In `validation.json` and on the Methodology page ([#40](https://github.com/FionaL7/AnalogAtlas/issues/40)) |
 
 **Verification.** Three text queries on the Moon index returned the expected terrain, and slopes measured independently from LOLA elevation data agree:
 
@@ -156,18 +158,18 @@ These are all the search API needs.
 
 ## Next steps
 
-The next milestone is the Earth index. Every Earth–Moon feature in the app depends on it.
+What's left is the submission itself (#22): the demo, the form, and a redeploy to pick up the 15 Nov data (#45).
 
-- [ ] **Decide hosting (blocking):** pick the hosts, claim the domain, get continuous deployment running so every push redeploys
-- [ ] Build Mars: tasks in [MARS-PLAN.md](MARS-PLAN.md#tasks)
+- [x] Hosting: decided and live at analogatlas.earth (#21, #45). Redeploys are manual Cloud Build triggers; per-push CD stays open under #21
+- [x] Build Mars: A1–A4, B1 and B2 done; B3 (sites/export/API) in progress (#42); C1 stretch items stay in #43
 - [x] South pole: decided core (#6), built as `moon_polar` (#26)
 - [x] Register Google Earth Engine (non-commercial use); project id lives in `.env`
-- [ ] Earth pipeline in Earth Engine: tile grid, Copernicus DEM slope and relief, export a table
-- [ ] Earth tile images (ASTER hillshade + imagery) and their CLIP embeddings
+- [x] Earth pipeline in Earth Engine: tile grid, Copernicus DEM slope and relief, exported table (#10, #25) — 11,699 land tiles in `earth_meta.parquet`
+- [x] Earth tile images (hillshade + imagery) and their CLIP embeddings (#23, #25) — `earth_{img,shade}.npy`, (11699, 512) each
 - [x] FastAPI wrapper around `analogatlas/analog.py` with `/search`, `/analogs`, `/twins`, `/tile`
 - [x] `scripts/03_export.py`: static export of the demo path to `web/public/data/` (see [ARCHITECTURE.md](ARCHITECTURE.md#4-data-contract) §4.2)
 - [x] React app: every backend output has a page ([#34](https://github.com/FionaL7/AnalogAtlas/issues/34))
-- [ ] Run the CSA SAR tutorial on one RCM scene
+- [x] RCM radar on real scenes — superseded the CSA tutorial: `scripts/04_radar.py` pulls RCM CEOS-ARD from the EODMS STAC; 3 close-study pairs measured (#19)
 - [x] Download Mini-RF and the polar LOLA / Diviner products
 - [x] Add the fixed "Earth's limits" rows to the report card in `analog.py`
 

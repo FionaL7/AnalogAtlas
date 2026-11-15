@@ -1,6 +1,6 @@
 # Requirements Analysis
 
-As of 14 Nov 2026. Sources:
+As of 15 Nov 2026 (submission day). Sources:
 - [BRIEF.md](BRIEF.md): the challenge text
 - [Project Submission Guide](https://www.spaceappschallenge.org/resources/project-submission-guide/)
 - [Judging and Awards Guide](https://www.spaceappschallenge.org/resources/judging-awards-guide/)
@@ -17,8 +17,8 @@ Missing any of these means the project is either off-challenge or not eligible f
 | # | Requirement | How we meet it |
 | --- | --- | --- |
 | C1 | Identify and characterize **one or more Earth locations** as analogs | 2–3 new candidate sites from global search, each with a report card |
-| C2 | The analogs are for **candidate permanent Moon-base locations** or **future Mars landing and exploration sites** | Covered. All ten Artemis candidate regions are in the `moon_polar` index (75–90°S, polar stereographic) and each returns ranked Earth analogs ([#26](https://github.com/FionaL7/AnalogAtlas/issues/26)). Numbers per region: [TARGET-SITES.md](TARGET-SITES.md) |
-| C3 | Use **open NASA Earth data** together with Moon or Mars data | Earth: ASTER / GIBS, NASA POWER. Moon: LRO (LOLA, Diviner, LROC, Mini-RF) |
+| C2 | The analogs are for **candidate permanent Moon-base locations** or **future Mars landing and exploration sites** | Covered, both halves. All ten Artemis candidate regions are in the `moon_polar` index (75–90°S, polar stereographic) and each returns ranked Earth analogs ([#26](https://github.com/FionaL7/AnalogAtlas/issues/26)). All 7 Mars landing and exploration sites are in the global `mars` index (22,016 tiles, ±60°) with scoring and report cards ([#37](https://github.com/FionaL7/AnalogAtlas/issues/37)–[#44](https://github.com/FionaL7/AnalogAtlas/issues/44)). Numbers per region: [TARGET-SITES.md](TARGET-SITES.md) |
+| C3 | Use **open NASA Earth data** together with Moon or Mars data | Earth: ASTER / GIBS, NASA POWER, MERRA-2 dust, MODIS via Earth Engine. Moon: LRO (LOLA, Diviner, LROC, Mini-RF). Mars: MGS MOLA and TES, Viking MDIM, Odyssey GRS, Trek mosaics |
 | C4 | Explain **what makes the location analogous** | Report card: dimensions where the analogy holds, with values from both bodies |
 | C5 | Explain **where the analogy breaks down** | Report card: dimensions where it breaks, plus fixed rows for Earth's limits (gravity, vacuum or atmosphere, radiation) |
 | C6 | Explain **how studying the Earth site helps** Moon or Mars exploration | A "what to test here" line on each report card (instruments, rover mobility, ISRU, operations) |
@@ -80,13 +80,13 @@ How we cover each dimension the brief lists:
 
 | Dimension | AnalogAtlas today | Gap / idea |
 | --- | --- | --- |
-| Geology, mineralogy, surface materials | Partial: Diviner rock abundance on the Moon only | Earth surface material from Sentinel-2 or ASTER bands; lunar basalt vs anorthosite (mare vs highland) |
-| Terrain, elevation, slope, roughness, craters | **Strong:** LOLA slope and relief, CLIP on hillshade, radar roughness planned | Crater counts from the Robbins catalog |
-| Temperature, illumination, environmental extremes | **Strong at the pole:** LOLA mean solar illumination over 18.6 yr (`avg_illum`, `illum_max`) vs Earth's annual sunlit fraction and polar-night length; Diviner temperature anomaly; NASA POWER on Earth | Illumination matters most for a base, and it is the dimension Earth most clearly fails: no Earth site exceeds ~50% annual sunlight, against 90% on the Shackleton rim |
-| Water, ice, permafrost, resources | Partial: `psr_frac` from the LOLA permanent-shadow map — cold traps are where the ice is | Pair PSRs with Earth permafrost explicitly; LEND or Mini-RF ice signatures |
+| Geology, mineralogy, surface materials | Partial: Diviner rock abundance (Moon); TES thermal inertia + albedo (Mars) against Earth's day–night swing and MODIS albedo | CRISM hydrous-mineral counts wait on the Trek feature service ([#38](https://github.com/FionaL7/AnalogAtlas/issues/38)); lunar basalt vs anorthosite |
+| Terrain, elevation, slope, roughness, craters | **Strong:** slope and relief at one ~1.85 km baseline on all three bodies (LOLA, MOLA, Copernicus), CLIP on hillshade, Mini-RF/RCM radar roughness on the close studies | |
+| Temperature, illumination, environmental extremes | **Strong at the pole:** LOLA mean solar illumination over 18.6 yr (`avg_illum`, `illum_max`) vs Earth's annual sunlit fraction and polar-night length; Diviner temperature anomaly; NASA POWER on Earth. Mars: extremes modelled from latitude + measured albedo and thermal inertia, vs Earth mean surface temperature | Illumination matters most for a base, and it is the dimension Earth most clearly fails: no Earth site exceeds ~50% annual sunlight, against 90% on the Shackleton rim |
+| Water, ice, permafrost, resources | Moon: `psr_frac` from the LOLA permanent-shadow map. Mars: GRS water-equivalent hydrogen (5° bins, regional), ice-rich tiles keep their frozen-ground analogs | Pair PSRs with Earth permafrost explicitly; LEND ice signatures |
 | Communications and operations | `earth_vis`: fraction of time Earth is in line of sight | Has no Earth equivalent, so it reports as `no_equivalent` rather than a match |
-| Dust, wind, erosion, surface processes | None | Mostly a Mars dimension (dust storms) |
-| Biology, extremophiles, habitability, biosignatures | None | Mars only. Low priority for a Moon-first scope |
+| Dust, wind, erosion, surface processes | Mars: TES dust cover index (relative) vs Earth MERRA-2 dust optical depth | Dust storms stay a "breaks down" row — no Earth equivalent |
+| Biology, extremophiles, habitability, biosignatures | None as data; aqueous Mars analogs (Rio Tinto, Pavilion Lake) are tagged as process analogs | Mars only. Low priority |
 | Caves, lava tubes, subsurface | Weak: two lunar pit presets | Lunar pits vs Earth lava-tube fields; L-band radar (ALOS PALSAR) for the shallow subsurface |
 | Landing, mobility, navigation, operations, construction | Partial: slope and rock abundance are landing hazards | Phrase the report card as landing, rover and base-construction criteria |
 
@@ -137,10 +137,10 @@ We don't need to cover every dimension. The brief says an analog "does not have 
 
 ### Final project
 
-- [ ] Public GitHub repo with a README: what it is, how to run it, the data sources, and a section on AI use
-- [ ] Deployed app (frontend and API) reachable without a login. A FortiGuard web-filter classification for any new domain is optional but recommended
+- [x] Public GitHub repo with a README: what it is, how to run it, the data sources, and a section on AI use
+- [x] Deployed app (frontend and API) reachable without a login, at analogatlas.earth. **Redeploy pending** to pick up the 15 Nov data (Mars validation keys, retrained scores) — run the two #45 triggers
 - [ ] Short write-up: the method, the candidate sites, limitations and Earth's limits
-- [ ] Accuracy evidence: the LOLA slope check, precision@k, radar comparison results
+- [x] Accuracy evidence: the LOLA slope check, crater precision@k, known-analog ranking (Moon and Mars: median top 2.57%), hold-one-out model, trap rates, radar comparisons — all in `validation.json` and on the Methodology page
 
 ### Before clicking submit
 
