@@ -1,12 +1,29 @@
-# AnalogAtlas
+# AnalogAtlas 🗺️
 
-Search engine for planetary analogs, built for the NASA Space Apps 2026 challenge [*Identify Earth Locations that Analog the Permanent Moon Base Locations and Mars*](https://www.spaceappschallenge.org/2026/challenges/permanent-moon-base-locations-and-mars/).
+**Team Mars Needs Maps** — [NASA Space Apps Challenge 2026](https://www.spaceappschallenge.org/2026/find-a-team/mars-needs-maps/)
 
-- **Earth analogs for a Moon-base site.** Rank Earth's land tiles by similarity to a lunar site, then show a report card of where the analogy holds and where it breaks down.
-- **Find terrain on the Moon.** Describe an Earth landscape in words, or upload an image, and get the matching lunar terrain.
-- **Both directions.** The same search, Earth → Moon or Moon → Earth.
+A search engine for planetary analogs: give it a Moon-base or Mars site, and it finds the Earth locations that are physically closest to it — then shows exactly where the resemblance holds and where it breaks down.
 
-Similarity is not just "looks alike": CLIP embeddings find candidates, and slope, relief, rock cover, temperature and radar roughness — measured from NASA data on both bodies — decide whether the analogy actually holds.
+Built for the challenge [*Identify Earth Locations that Analog the Permanent Moon Base Locations and Mars*](https://www.spaceappschallenge.org/2026/challenges/permanent-moon-base-locations-and-mars/).
+
+**🔗 Live demo: [analogatlas.earth](https://analogatlas.earth)**
+
+## What we built
+
+- **Earth analogs for a Moon-base or Mars site.** Rank Earth's land tiles by similarity to a lunar or Martian site, then show a report card of where the analogy holds and where it breaks down.
+- **Find terrain on the Moon or Mars.** Describe an Earth landscape in words, or upload an image, and get the matching terrain on another body.
+- **Both directions.** The same search, Earth → Moon/Mars or Moon/Mars → Earth.
+
+Similarity isn't just "looks alike": CLIP image embeddings find candidates, then slope, relief, rock cover, temperature and radar roughness — all measured from NASA data on both bodies — decide whether the analogy actually holds physically.
+
+## About the team
+
+We're a team of curious minds excited about space exploration, planetary science, and using technology to solve real-world challenges. Our goal is to explore open datasets, combine scientific insight with data analysis and visualization, and build a solution that helps identify and compare promising terrestrial analogue sites.
+
+| Member | Space Apps username |
+| --- | --- |
+| Fiona Lazarus | `fional` |
+| Rishabh Khandelwal | `yesspark` |
 
 ## Docs
 
@@ -24,33 +41,23 @@ Similarity is not just "looks alike": CLIP embeddings find candidates, and slope
 
 Download the [raw rasters](#raw-data) into `data/raw/` first. PyTorch picks its own device: Apple GPU (MPS) on a Mac, CUDA on an NVIDIA GPU, otherwise CPU — fine for 5k tiles, just slower.
 
-### macOS / Linux
-
 ```bash
 uv venv --python 3.12
-source .venv/bin/activate
+source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
 uv pip install -r requirements.txt
 python scripts/01_tiles.py moon     # grid + tile download (~5.4k Moon tiles, ~11k requests to NASA Trek)
 python scripts/02_features.py moon  # DEM/Diviner stats + CLIP embeddings (~5 min on an M1)
 ```
 
-### Windows (PowerShell)
-
-```powershell
-uv venv --python 3.12
-.venv\Scripts\Activate.ps1
-uv pip install -r requirements.txt
-python scripts\01_tiles.py moon
-python scripts\02_features.py moon
-```
-
-Pass `earth` instead of `moon` for the GIBS + ETOPO fallback path (~11.7k tiles). The main Earth path is moving to Google Earth Engine — see [docs/PLAN.md](docs/PLAN.md).
+Pass `earth` or `mars` instead of `moon` for the other bodies.
 
 If HTTPS downloads fail with a certificate error, your certificate store is probably missing a root one of the data hosts relies on. We hit this on Windows with spaceappschallenge.org.
 
-## Raw data
+<a id="raw-data"></a>
+<details>
+<summary><strong>Raw data</strong> — exact files, sizes and sources (click to expand)</summary>
 
-Download once into `data/raw/`. **Take the `.lbl` label file next to each `.img`** — the PDS3 reader in `analogatlas/rasters.py` parses it for the array shape and scaling, so an `.img` alone won't load. ~656 MB total.
+Download once into `data/raw/`. **Take the `.lbl` label file next to each `.img`** — the PDS3 reader in `analogatlas/rasters.py` parses it for the array shape and scaling, so an `.img` alone won't load. ~656 MB total for the Moon:
 
 | File | Size | Source |
 | --- | --- | --- |
@@ -93,24 +100,29 @@ Unpack the bundle's `data/*.csv` straight into `data/raw/robbins/`. It holds 1,2
 
 Exact filenames are set in [`analogatlas/config.py`](analogatlas/config.py). LOLA LDEM_16 (1.9 km/px) and ETOPO 60s (1.85 km/px) sample at nearly the same resolution, which is what makes slope and relief comparable between the two bodies. The polar DEM is finer (240 m/px) and is block-averaged to 1.92 km before slope is measured, so it lands on the same baseline.
 
-## Outputs
+</details>
 
-`data/index/`, which is everything the search needs:
+<details>
+<summary><strong>Outputs</strong> — what the pipeline writes to <code>data/index/</code> (click to expand)</summary>
 
 - `{body}_meta.parquet` — one row per tile: coordinates and physical features
 - `{body}_img.npy`, `{body}_shade.npy` — `(N, 512)` float16 CLIP embeddings, row-aligned with the parquet
 - `{body}_craters.parquet` — Robbins crater labels per lunar tile, for validation only ([#16](https://github.com/FionaL7/AnalogAtlas/issues/16)); never a search feature
 - `validation.json` — how the search scores against independent data: crater retrieval, where each known analog ranks for its role, and the hold-one-out model check
 
-`body` is `moon`, `moon_polar` or `earth`. `moon_polar` is the lunar south pole on its own polar stereographic grid: past ~60° an equirectangular tile stops being square on the ground, so the pole cannot share the `moon` grid.
+`body` is `moon`, `moon_polar`, `mars` or `earth`. `moon_polar` is the lunar south pole on its own polar stereographic grid: past ~60° an equirectangular tile stops being square on the ground, so the pole cannot share the `moon` grid.
 
 Moon: 5,376 tiles, 5.5 MB per matrix. Earth: ~11.7k tiles, ~12 MB per matrix.
 
 `data/` and `.venv/` are not in git. See [docs/PLAN.md](docs/PLAN.md#open-decisions) for how the built index is shared between machines.
 
+</details>
+
 ## Data sources and credits
 
-Every dataset, with its source and status, is listed in [docs/RESOURCES.md](docs/RESOURCES.md). NASA: LRO (LOLA, Diviner, LROC WAC via Moon Trek, Mini-RF), GIBS / Worldview, ASTER GDEM, NASA POWER. Space agency partners: CSA (RADARSAT RCM, SAR tutorial), ESA (Copernicus DEM, Sentinel-1/2). Other: NOAA ETOPO 2022.
+Every dataset, with its source and status, is listed in [docs/RESOURCES.md](docs/RESOURCES.md). NASA: LRO (LOLA, Diviner, LROC WAC via Moon Trek, Mini-RF), Mars Trek, GIBS / Worldview, ASTER GDEM, NASA POWER. Space agency partners: CSA (RADARSAT RCM, SAR tutorial), ESA (Copernicus DEM, Sentinel-1/2). Other: USGS Astrogeology, ASU, NOAA ETOPO 2022.
+
+Model weights: CLIP `ViT-B-32` / `laion2b_s34b_b79k` via [open_clip](https://github.com/mlfoundations/open_clip) (LAION), used for image and text embeddings.
 
 ## Use of AI tools
 
@@ -120,5 +132,3 @@ This project was built with AI assistance, disclosed as the Space Apps rules req
 - **Verdict summaries are LLM-drafted, human-reviewed.** Each report card's verdict *tier* is rule-based from our measured data (`analogatlas/verdict.py`); the ~100-word summary beneath it is drafted by an LLM (`scripts/07_verdicts.py`) strictly from that card's numbers, then read by the team before shipping. The model is named in the app next to every summary and recorded in `data/index/verdicts.json`.
 - The solution idea, the challenge approach, and the scientific interpretation are the team's own.
 - No AI-generated imagery, video or audio is used in the project or its submission materials.
-
-Model weights: CLIP `ViT-B-32` / `laion2b_s34b_b79k` via [open_clip](https://github.com/mlfoundations/open_clip) (LAION), used for image and text embeddings.
