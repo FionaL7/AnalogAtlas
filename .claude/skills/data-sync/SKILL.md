@@ -25,8 +25,10 @@ python scripts/data.py push index                     # all of data/index/
 python scripts/data.py push index/earth_meta.parquet  # one file
 python scripts/data.py push raw/minirf                # one folder, as a .tar
 ```
-Then post on the Team log what you pushed and which commit built it.
+- Pushing `index/` or `tiles/` also redeploys the live site: it starts the Cloud Build triggers (`index`: API + web, `tiles`: API). Needs `gcloud` logged in and `GCP_PROJECT` in `.env`; otherwise it prints the command to run. `--no-deploy` skips it.
+- Then post on the Team log what you pushed and which commit built it.
 
 ## Check it worked
 - `python scripts/data.py list` shows each file's size and upload time.
 - After a pull, the API starts and a search returns results.
+- After a push: `gcloud builds list --region=us-central1 --limit=2` shows the deploys; each takes ~5–10 min.

@@ -8,10 +8,18 @@ Both halves run in one Cloud project, `$GCP_PROJECT` (Rishabh's account), region
 
 ## How it works
 
-- Push to `main` touching `api/`, `analogatlas/` or `deploy/api/` → Cloud Build trigger `deploy-api` runs [deploy/api/cloudbuild.yaml](../deploy/api/cloudbuild.yaml): build image → push → deploy.
-- The image bakes in CLIP and pulls the index and tiles from the GitHub Release `data` at build time. No keys in the repo.
+Every deploy is a Cloud Build trigger on `main` (repo connected by Fiona, #45). No keys in the repo.
+
+| Trigger | Runs on push to `main` touching | Config | Does |
+| --- | --- | --- | --- |
+| `deploy-api` | `api/**`, `analogatlas/**`, `deploy/api/**` | [deploy/api/cloudbuild.yaml](../deploy/api/cloudbuild.yaml) | Build image (CLIP baked in, index + tiles from the `data` release) → Cloud Run |
+| `deploy-web` | `web/**`, `analogatlas/**`, `api/indices.py`, `scripts/03_export.py`, `firebase.json`, `deploy/web/**` | [deploy/web/cloudbuild.yaml](../deploy/web/cloudbuild.yaml) | Index from the release → `03_export.py` → `npm run build` → Firebase Hosting |
+
+- **New data:** `python scripts/data.py push index` (or `tiles`) starts the triggers itself after uploading. A release upload alone triggers nothing.
+- The web build reads the API URL from Cloud Run, so it is never in the repo.
 - **Scale to zero** (`--min-instances=0`): ~free while idle. The first request after ~15 min idle waits up to ~30 s (cold start). The frontend pings `/health` on page load to start it early.
-- Only the 2 newest images are kept ([cleanup-policy.json](../deploy/api/cleanup-policy.json)), so storage stays ~$0.50/month.
+- Only the 2 newest API images are kept ([cleanup-policy.json](../deploy/api/cleanup-policy.json)), so storage stays ~$0.50/month.
+- Run either by hand: `gcloud builds triggers run deploy-web --branch=main --region=us-central1`.
 
 ## Who can deploy
 
@@ -71,11 +79,11 @@ Done already (#45), kept here in case the project has to be rebuilt.
    ```bash
    SA=deployer@$GCP_PROJECT.iam.gserviceaccount.com
    gcloud iam service-accounts create deployer --display-name="Cloud Build deployer"
-   for r in run.admin artifactregistry.writer logging.logWriter iam.serviceAccountUser storage.objectViewer; do
+   for r in run.admin artifactregistry.writer logging.logWriter iam.serviceAccountUser storage.objectViewer             firebasehosting.admin serviceusage.serviceUsageConsumer; do
      gcloud projects add-iam-policy-binding $GCP_PROJECT --member=serviceAccount:$SA --role=roles/$r
    done
    ```
-   `storage.objectViewer` is only needed for `gcloud builds submit`: it reads the uploaded source.
+   `storage.objectViewer` is only needed for `gcloud builds submit`: it reads the uploaded source. The last two are for the web deploy.
 5. **Access for the team**:
    ```bash
    gcloud projects add-iam-policy-binding $GCP_PROJECT --member=user:<google email> --role=roles/editor

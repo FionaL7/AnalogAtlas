@@ -7,6 +7,11 @@
     python scripts/data.py push raw/minirf index/moon_meta.parquet
     python scripts/data.py list
 
+After pushing index/ or tiles/, push also starts the Cloud Build deploy triggers
+(index: API + web, tiles: API) so the live site picks up the new data. That needs
+gcloud and GCP_PROJECT (env or .env); without them it prints the command to run.
+Skip it with --no-deploy.
+
 Each entry directly under data/<folder>/ is one release file:
     a file   -> "<folder>__<name>"         e.g. index__moon_meta.parquet
     a folder -> "<folder>__<name>.tar"     e.g. tiles__moon.tar (uncompressed; tiles are PNG/JPG)
@@ -17,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -87,6 +93,31 @@ def push(targets: list[str]) -> None:
                 src.unlink()
 
 
+def redeploy(targets: list[str]) -> None:
+    """Start the deploy triggers that bake this data in (docs/DEPLOY.md)."""
+    folders = {t.split("/")[0] for t in targets}
+    triggers = (["deploy-api", "deploy-web"] if "index" in folders
+                else ["deploy-api"] if "tiles" in folders else [])
+    if not triggers:
+        return
+    project = os.environ.get("GCP_PROJECT")
+    env = ROOT / ".env"
+    if not project and env.exists():
+        for line in env.read_text(encoding="utf-8").splitlines():
+            if line.strip().startswith("GCP_PROJECT="):
+                project = line.split("=", 1)[1].strip().strip("\"'")
+    gcloud = shutil.which("gcloud")
+    for t in triggers:
+        cmd = [gcloud or "gcloud", "builds", "triggers", "run", t, "--branch=main",
+               "--region=us-central1", f"--project={project or '$GCP_PROJECT'}"]
+        if not (gcloud and project):
+            print(f"not redeployed (needs gcloud and GCP_PROJECT). Run: gcloud {' '.join(cmd[1:])}")
+            continue
+        print(f"starting {t} ...")
+        r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+        print(f"  {t} started" if r.returncode == 0 else f"  {t} FAILED:\n{r.stderr}")
+
+
 def pull(folders: list[str]) -> None:
     if folders == ["all"]:
         folders = FOLDERS
@@ -127,12 +158,16 @@ def main() -> None:
     p.add_argument("folders", nargs="*", default=["index"])
     p = sub.add_parser("push")
     p.add_argument("targets", nargs="+")
+    p.add_argument("--no-deploy", action="store_true",
+                   help="don't start the deploy triggers after uploading")
     sub.add_parser("list")
     a = ap.parse_args()
     if a.cmd == "pull":
         pull(a.folders)
     elif a.cmd == "push":
         push(a.targets)
+        if not a.no_deploy:
+            redeploy(a.targets)
     else:
         list_assets()
 
