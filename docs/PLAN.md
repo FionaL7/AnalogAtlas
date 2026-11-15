@@ -24,11 +24,11 @@ There are two stages:
 1. **Global screening.** We split the Moon and Earth's land into tiles of about 85 × 85 km. Each tile gets CLIP embeddings (vectors describing what it looks like) and physical measurements, and search runs across both bodies.
 2. **Close study.** For the 2–3 strongest *new* candidates, we compare radar surface roughness (RADARSAT RCM or Sentinel-1 on Earth, LRO Mini-RF on the Moon), add high-resolution imagery and slopes, and write a full report card.
 
-Scope: the Moon first. How much Mars gets is an [open decision](#open-decisions).
+Scope: the Moon first, then Mars as a full second body. Plan: [MARS-PLAN.md](MARS-PLAN.md).
 
 ## Status
 
-Search works end to end on real data: Moon, south pole and Earth indexes, the API, the static export and the app. Still open: Mars (#7).
+Search works end to end on real data: Moon, south pole and Earth indexes, the API, the static export and the app. Mars is planned, not built: [MARS-PLAN.md](MARS-PLAN.md), tasks under the `mars` label.
 
 | Piece | State | Notes |
 | --- | --- | --- |
@@ -44,7 +44,7 @@ Search works end to end on real data: Moon, south pole and Earth indexes, the AP
 | Search API | Done | `api/`: `/search`, `/analogs`, `/twins` (with field tests and model score), `/tile` |
 | React frontend | Done | Atlas (site, map-click and text/picture search, report card with tile pictures and field tests), field guides, discoveries, traps, methodology with validation, data and credits ([#34](https://github.com/FionaL7/AnalogAtlas/issues/34)) |
 | Radar close study | Done | Mini-RF CPR for every lunar site (`radar.json`). 3 new pairs measured up close: radar on both bodies, 30 m slope, Sentinel-2 picture, full report card, page at `/close-study/:id`. Pairs and why: `analogatlas/closestudy.py` ([#19](https://github.com/FionaL7/AnalogAtlas/issues/19)) |
-| Mars | Not started | |
+| Mars | Planned | Global `mars` index, 7 landing sites, report card, validation. Plan and tasks: [MARS-PLAN.md](MARS-PLAN.md) |
 
 **Verification.** Three text queries on the Moon index returned the expected terrain, and slopes measured independently from LOLA elevation data agree:
 
@@ -144,7 +144,7 @@ These are all the search API needs.
 The next milestone is the Earth index. Every Earth–Moon feature in the app depends on it.
 
 - [ ] **Decide hosting (blocking):** pick the hosts, claim the domain, get continuous deployment running so every push redeploys
-- [ ] Decide the Mars question below
+- [ ] Build Mars: tasks in [MARS-PLAN.md](MARS-PLAN.md#tasks)
 - [x] South pole: decided core (#6), built as `moon_polar` (#26)
 - [x] Register Google Earth Engine (non-commercial use); project id lives in `.env`
 - [ ] Earth pipeline in Earth Engine: tile grid, Copernicus DEM slope and relief, export a table
@@ -175,4 +175,4 @@ The next milestone is the Earth index. Every Earth–Moon feature in the app dep
 
 ### Open decisions
 
-- **How much Mars?** The title gives Mars equal billing ("future Mars landing and exploration sites"). Options: one slide showing the method transfers, or a small Mars index (MOLA plus CTX or THEMIS tiles) with the same search on 2–3 Mars landing sites.
+- **How much Mars?** Proposed by Rishabh: a full global `mars` index with the same search, report card and validation as the Moon ([MARS-PLAN.md](MARS-PLAN.md)). Waiting for Fiona's OK on [#7](https://github.com/FionaL7/AnalogAtlas/issues/7).
