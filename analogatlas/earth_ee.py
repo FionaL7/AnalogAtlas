@@ -137,7 +137,9 @@ def environment(grid: pd.DataFrame, batch: int = 150, workers: int = 4) -> pd.Da
     """Per-tile environment columns (means over the tile, except access: 10th pct).
 
     lst_*_c      MODIS land-surface temperature 2015-24, deg C (day/night mean,
-                 hottest day p95, coldest night p5); lst_swing_c = day - night
+                 hottest day p95, coldest night p5); lst_swing_c = day - night;
+                 lst_mean_c = their mean (below 0 = frozen ground)
+    albedo, dust_aod   see mars_counterparts()
     precip_mm    TerraClimate annual precipitation; aridity = precip / PET
     solar_wm2    TerraClimate mean downward shortwave
     ndvi         MODIS NDVI mean
@@ -175,4 +177,70 @@ def environment(grid: pd.DataFrame, batch: int = 150, workers: int = 4) -> pd.Da
     # precip / PET; capped, because PET -> 0 on ice sheets (TerraClimate is
     # unreliable in Antarctica anyway, where ice_frac says what matters)
     env["aridity"] = (env.precip_mm / env.pet_mm.where(env.pet_mm > 0)).clip(upper=10)
+    env["lst_mean_c"] = mean_surface_c(env)
+    # the Earth side of the Mars comparisons (#39), so a full rebuild keeps them
+    env = pd.concat([env, mars_counterparts(grid)], axis=1)
     return env.drop(columns="pet_mm")
+
+
+# ------------------------------------------------- Mars counterpart columns --
+# The Earth side of the Mars comparisons (docs/MARS-PLAN.md, #39). Three years
+# rather than ten: a ten-year mean costs six times as long and moved no test
+# tile by more than 0.02 in either column.
+COUNTERPART_YEARS = ("2020-01-01", "2023-01-01")
+COUNTERPART_COLUMNS = ["albedo", "dust_aod"]
+
+
+@lru_cache(maxsize=1)
+def _counterpart_image():
+    ee = init()
+    t0, t1 = COUNTERPART_YEARS
+    # White-sky shortwave albedo (0.3-5 um): the closest MODIS product to the
+    # TES bolometric albedo used on Mars. Seasonal snow is in the mean.
+    albedo = (ee.ImageCollection("MODIS/061/MCD43A3").filterDate(t0, t1)
+              .select("Albedo_WSA_shortwave").mean().multiply(0.001).rename("albedo"))
+    # MERRA-2 dust extinction optical depth at 550 nm. The collection is
+    # hourly; one field a day (12 UTC) is enough for a multi-year mean.
+    dust = (ee.ImageCollection("NASA/GSFC/MERRA/aer/2").filterDate(t0, t1)
+            .filter(ee.Filter.calendarRange(12, 12, "hour"))
+            .select("DUEXTTAU").mean().rename("dust_aod"))
+    return ee.Image.cat(albedo, dust)
+
+
+def mars_counterparts(grid: pd.DataFrame, batch: int = 100, workers: int = 4,
+                      on_chunk=None) -> pd.DataFrame:
+    """Per-tile means of the Mars counterpart columns, in grid order.
+
+    albedo     MODIS MCD43A3 white-sky shortwave albedo, 0-1, 2020-22
+    dust_aod   MERRA-2 dust optical depth (DUEXTTAU), 2020-22
+
+    `on_chunk(rows)` is called with each finished batch, so a long run can
+    save as it goes.
+    """
+    ee = init()
+    img = _counterpart_image()
+
+    def run(chunk: pd.DataFrame) -> list[dict]:
+        fc = ee.FeatureCollection([ee.Feature(_rect(r), {"tile_id": r.tile_id}) for r in chunk.itertuples()])
+        feats = img.reduceRegions(fc, ee.Reducer.mean(), scale=ENV_SCALE_M, tileScale=4).getInfo()["features"]
+        rows = [{"tile_id": f["properties"]["tile_id"],
+                 **{c: (np.nan if f["properties"].get(c) is None else f["properties"][c])
+                    for c in COUNTERPART_COLUMNS}} for f in feats]
+        if on_chunk:
+            on_chunk(rows)
+        return rows
+
+    if grid.empty:
+        return pd.DataFrame(columns=COUNTERPART_COLUMNS)
+    chunks = [grid.iloc[i:i + batch] for i in range(0, len(grid), batch)]
+    rows = []
+    with ThreadPoolExecutor(workers) as ex:
+        for res in tqdm(ex.map(run, chunks), total=len(chunks), desc="earth counterparts (EE)"):
+            rows.extend(res)
+    out = pd.DataFrame(rows).set_index("tile_id").reindex(grid.tile_id)
+    return out[COUNTERPART_COLUMNS].reset_index(drop=True)
+
+
+def mean_surface_c(meta: pd.DataFrame) -> pd.Series:
+    """lst_mean_c: mean of the MODIS day and night means. Below 0 = frozen ground."""
+    return (meta.lst_day_c + meta.lst_night_c) / 2
