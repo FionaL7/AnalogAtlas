@@ -42,5 +42,4 @@ steps:
 options:
   dynamicSubstitutions: true   # expands ${PROJECT_ID} inside _IMAGE
   logging: CLOUD_LOGGING_ONLY
-  dynamicSubstitutions: true   # lets _IMAGE use ${PROJECT_ID}
 timeout: 3600s

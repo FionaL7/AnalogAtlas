@@ -1,9 +1,10 @@
 # Deploy
 
-The API runs on **Cloud Run** in the Cloud project `$GCP_PROJECT` (Rishabh's account), region `us-central1`, service `analogatlas-api` ([#45](https://github.com/FionaL7/AnalogAtlas/issues/45)). The frontend host is still to do ([#21](https://github.com/FionaL7/AnalogAtlas/issues/21)).
+Both halves run in one Cloud project, `$GCP_PROJECT` (Rishabh's account), region `us-central1` ([#45](https://github.com/FionaL7/AnalogAtlas/issues/45)):
 
-- The project id is in `.env` as `GCP_PROJECT`. Don't write it into the repo.
-- The API URL is on the Team log (#2).
+- **API**: Cloud Run, service `analogatlas-api`. URL on the Team log (#2).
+- **Frontend**: Firebase Hosting at **https://analogatlas.earth** (`www` redirects there). Config: [firebase.json](../firebase.json).
+- The project id is in `.env` as `GCP_PROJECT`. Don't write it into the repo (so no `.firebaserc`; pass `--project`).
 
 ## How it works
 
@@ -16,7 +17,7 @@ The API runs on **Cloud Run** in the Cloud project `$GCP_PROJECT` (Rishabh's acc
 
 Fiona and Rishabh both have the Editor role on the project. That is enough to run the commands below.
 
-## Deploy by hand
+## API: deploy by hand
 
 Use after `python scripts/data.py push index` (or tiles), or while the trigger isn't set up. From a clean checkout of `main`:
 
@@ -34,6 +35,20 @@ Check it:
 URL=$(gcloud run services describe analogatlas-api --region=us-central1 --format='value(status.url)')
 curl $URL/health    # should list moon, moon_polar, earth
 ```
+
+## Frontend: deploy by hand
+
+From a clean checkout of `main`. Needs `npm i -g firebase-tools` and `gcloud auth application-default login` once (`firebase login` doesn't work in agent shells).
+
+```bash
+python scripts/data.py pull                # data/index/ from the release
+python scripts/03_export.py                # -> web/public/data/
+cd web && npm ci
+VITE_API_BASE=<API URL> npm run build      # PowerShell: $env:VITE_API_BASE="<API URL>"; npm run build
+cd .. && firebase deploy --only hosting --project $GCP_PROJECT
+```
+
+Check: open https://analogatlas.earth and run a free-text search (it calls the API).
 
 ## One-time setup
 
@@ -71,6 +86,8 @@ Done already (#45), kept here in case the project has to be rebuilt.
    - Included files filter: `api/**`, `analogatlas/**`, `deploy/api/**`.
    - Configuration: Cloud Build file, location `deploy/api/cloudbuild.yaml`.
    - Service account: `deployer@<project id>.iam.gserviceaccount.com`.
+
+7. **Firebase Hosting**: add Firebase to the project in the [Firebase console](https://console.firebase.google.com) (first time per Google account: accept the terms there, the API refuses until then). Then Hosting → Add custom domain `analogatlas.earth` and `www` (redirect to the bare domain). At Porkbun: delete the parking ALIAS/CNAME/`_acme-challenge` records, add the A, TXT and `www` CNAME records Firebase shows. HTTPS follows within ~1 h.
 
 ## Gotchas
 

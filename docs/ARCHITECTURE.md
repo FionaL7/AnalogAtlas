@@ -84,7 +84,7 @@ This directly answers a requirement: [REQUIREMENTS.md](REQUIREMENTS.md#4-things-
 | State | **Zustand** (app state) + URL query params | Every view is a shareable link: `/atlas?site=shackleton&w_phys=0.3&cell=earth_-77.50_162.00` |
 | Content | **MDX** field guides for the 2–3 close-study sites | The brief explicitly asks us to document findings for a public audience |
 | Tooling | **pnpm**, **Biome** (lint + format), **Vitest**, one **Playwright** smoke test | One tool for lint+format; smoke test guards the demo path |
-| Hosting | **Google Cloud** (Fiona's Earth Engine project): API on Cloud Run. Domain: marsneedsmaps.space | [Decided](PLAN.md#decisions). Frontend host and CD pipeline get settled when deploying ([#21](https://github.com/FionaL7/AnalogAtlas/issues/21)) |
+| Hosting | **Google Cloud**: API on Cloud Run, frontend on Firebase Hosting. Domain: analogatlas.earth | [Decided](PLAN.md#decisions). How it deploys: [DEPLOY.md](DEPLOY.md) |
 
 ## 3. Pages
 
@@ -370,4 +370,4 @@ data/              gitignored: raw/ tiles/ index/
 - **South pole: decided core and built** ([#6](https://github.com/FionaL7/AnalogAtlas/issues/6), [#26](https://github.com/FionaL7/AnalogAtlas/issues/26)). The Moon index above is cylindrical, ±60°; the pole is a separate `moon_polar_*` file set on a south polar stereographic grid — *not* a reprojection of the existing one — with `"moon_polar"` as a third `body` value and its own map pane. As predicted, this was purely additive: `cross_body` and `load_index` needed no changes.
 - **How much Mars:** `sites.json` and the `body` field already allow Mars presets; a Mars index would follow the Moon's file pattern exactly.
 - **Map library: decided, Leaflet** (#24). The polar pane uses a custom Leaflet CRS (`web/src/lib/polar.ts`) rather than proj4leaflet — the spherical stereographic forward/inverse is six lines, so two dependencies bought nothing. It mirrors `tiles.sp_forward`/`sp_inverse`, and `web/src/__tests__/polar.test.ts` checks the two agree.
-- **Hosting: decided** ([PLAN.md](PLAN.md#decisions)). Google Cloud on Fiona's Earth Engine project, with the API on Cloud Run. Frontend host and CD pipeline get settled when deploying (#21).
+- **Hosting: decided** ([PLAN.md](PLAN.md#decisions)). Google Cloud: API on Cloud Run, frontend on Firebase Hosting at analogatlas.earth ([DEPLOY.md](DEPLOY.md)).
