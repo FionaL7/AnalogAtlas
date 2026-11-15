@@ -3,6 +3,7 @@
     python scripts/03_export.py                  # -> web/public/data/
     python scripts/03_export.py --no-climate     # skip the NASA POWER calls
     python scripts/03_export.py --out /tmp/data  # somewhere else
+    python scripts/03_export.py --geocode        # also fill missing Earth place names
 
 Everything the demo opens is written here, so judging never depends on the API
 being up (ARCHITECTURE.md §1, §4.2). The API still serves free-text and image
@@ -18,7 +19,8 @@ Reads data/index/ and writes, under --out:
     twins/{site}__{tile}.json      report cards, climate baked in
     validation.json                copied from data/index/ if #16 has produced it
     traps.json                     lookalike traps (#30)
-    candidates.json                the #29 model's top new candidates, per target
+    candidates.json                the #29 model's top new candidates, per target, with
+                                   place names from analogatlas/place_names.json
     radar.json                     Mini-RF CPR per lunar site (#17), keyed by site id
     portfolio/{site_id}.json       fewest Earth sites covering every dimension (#31)
     close_study.json               the #19 close-study pairs, plus close_study/*.jpg
@@ -39,7 +41,9 @@ import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from analogatlas import analog, config as C, fieldtest, portfolio, tiles, traps, verdict  # noqa: E402
+from analogatlas import (  # noqa: E402
+    analog, config as C, fieldtest, places, portfolio, tiles, traps, verdict,
+)
 from analogatlas.sites import (  # noqa: E402
     EARTH_PRESETS, KNOWN_EARTH_ANALOGS, MARS_SITE_BLURBS, MARS_SITES, MOON_BASE_REGIONS, MOON_SITES,
 )
@@ -55,6 +59,16 @@ MARS_TILE_COLUMNS = ["thermal_inertia", "albedo", "dust_index", "weh_pct", "hydr
 # The #29 model's score column for each source body's target.
 MODEL_SCORE_COLUMN = {"moon": "analog_score_moon", "moon_polar": "analog_score_moon",
                       "mars": "analog_score_mars"}
+# Earth hits per site that get a place name: the app lists 12, new-first or new-only.
+NAMED_HITS = 12
+# Set by --geocode: look up names missing from analogatlas/place_names.json.
+GEOCODE = False
+
+
+def name_places(points) -> None:
+    """With --geocode, fill the place-name cache for these Earth points first."""
+    if GEOCODE:
+        places.fill([(float(la), float(lo)) for la, lo in points])
 
 
 def slug(name: str) -> str:
@@ -254,6 +268,11 @@ def export_analogs(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
     i = src.nearest_tile(site["lat"], site["lon"])
     hits = analog.cross_body(src, i, dst, k=k)
     hits = hits[np.isfinite(hits.score.values)]
+    on_earth = site["body"] != "earth"
+    if on_earth:
+        known = hits.known_analog.notna() if "known_analog" in hits else np.zeros(len(hits), bool)
+        shown = pd.concat([hits.head(NAMED_HITS), hits[~known].head(NAMED_HITS)])
+        name_places(zip(shown.lat, shown.lon))
     results = [dict(
         tile_id=r.tile_id, lat=clean(r.lat, 3), lon=clean(r.lon, 3),
         score=clean(r.score, 4),
@@ -261,6 +280,7 @@ def export_analogs(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
         physical=clean(r.physical, 4),
         known_analog=clean(getattr(r, "known_analog", None)),
         model_score=(clean(model_scores.get(str(r.tile_id)), 4) if model_scores else None),
+        place=places.name(r.lat, r.lon) if on_earth else None,
     ) for r in hits.itertuples()]
     src_row = src.meta.iloc[i]
     write_json(out / "analogs" / f"{site['id']}.json", dict(
@@ -312,7 +332,8 @@ def export_twins(site: dict, src: analog.BodyIndex, dst: analog.BodyIndex,
             moon={"body": site["body"],
                   **{c: clean(moon_row[c], 4) for c in moon_row.index if c not in ("z", "y", "x")}},
             earth={**{c: clean(earth_row[c], 4) for c in earth_row.index},
-                   "visual_cos_scaled": clean(earth_row.visual_cos_scaled, 4)},
+                   "visual_cos_scaled": clean(earth_row.visual_cos_scaled, 4),
+                   "place": places.name(float(earth_row.lat), float(earth_row.lon))},
             climate=None if climate is None else {k: clean(v, 3) for k, v in climate.items()},
             breakdown=[dict(dimension=r.dimension, id=slug(r.dimension),
                             moon=clean(r.moon), earth=clean(r.earth),
@@ -383,6 +404,10 @@ def export_candidates(out: Path) -> int | None:
         path = C.INDEX / f"candidates_{target}.json"
         if path.exists():
             payload[target] = json.loads(path.read_text())
+    name_places((c["lat"], c["lon"]) for rows in payload.values() for c in rows)
+    for rows in payload.values():
+        for c in rows:
+            c["place"] = places.name(c["lat"], c["lon"])
     if not payload:
         print("  - no data/index/candidates_*.json yet (#29), skipping candidates.json")
         return None
@@ -474,7 +499,12 @@ def main() -> int:
     ap.add_argument("--pairs", type=int, default=3, help="report cards per site (default 3)")
     ap.add_argument("--no-climate", action="store_true",
                     help="skip NASA POWER; twins get no climate rows")
+    ap.add_argument("--geocode", action="store_true",
+                    help="look up Earth place names missing from analogatlas/place_names.json "
+                         "(OpenStreetMap Nominatim, 1 request/s); without it the cache is only read")
     args = ap.parse_args()
+    global GEOCODE
+    GEOCODE = args.geocode
 
     missing = [b for b in ("moon", "earth") if not (C.INDEX / f"{b}_meta.parquet").exists()]
     if missing:

@@ -65,7 +65,9 @@ export interface AnalogHit extends SearchHit {
   /** 0-1 closeness of slope and relief. */
   physical: number;
   /** #29 analog model: 0-1 percentile among Earth tiles. Null/absent until trained. */
-  model_score?: number | null;
+  model_score?: number | null;  /** Earth hits: a human place name, e.g. "Catamarca, Argentina" (03_export.py
+   *  --geocode). Null or absent where none is cached: show the coordinates. */
+  place?: string | null;
 }
 
 export interface AnalogsResponse {
@@ -233,6 +235,8 @@ export interface Candidate {
   barren_frac?: number | null;
   precip_mm?: number | null;
   access_min?: number | null;
+  /** Human place name, e.g. "Catamarca, Argentina". Null where none is cached. */
+  place?: string | null;
 }
 
 export type CandidatesFile = Partial<Record<"moon" | "mars" | "all", Candidate[]>>;

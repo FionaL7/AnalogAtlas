@@ -1,5 +1,6 @@
 /**
- * The report card: the two tiles side by side, then dimension by dimension
+ * The report card: a spider chart of the match next to the verdict, the two
+ * tiles side by side, then dimension by dimension
  * where the analogy holds and where it breaks down, then what to test there.
  * Rows arrive already scored from Python (§4.3) and are only grouped here.
  * Every bar also prints its number, so colour is never the only carrier of
@@ -14,6 +15,7 @@ import {
   type Verdict,
 } from "../../lib/types";
 import { Hint } from "../Hint";
+import { MatchRadar } from "../MatchRadar";
 import { TileChip } from "../TileChip";
 
 const GROUP_ORDER: Group[] = ["holds", "breaks", "cannot-reproduce", "no-equivalent"];
@@ -84,17 +86,30 @@ function VerdictBlock({ verdict }: { verdict: Verdict }) {
   const tier = TIER[verdict.tier];
   const held = Math.round(verdict.holds_frac * verdict.n_compare);
   return (
-    <div className="mt-3 rounded border border-edge p-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex h-full flex-col rounded border border-edge p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs uppercase tracking-wide text-muted">Verdict</span>
         <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${tier.cls}`}>
           {tier.label}
         </span>
-        <span className="text-xs text-muted">
-          {held} of {verdict.n_compare} comparable dimensions hold
-        </span>
       </div>
-      <p className="mt-2 text-sm">{verdict.prose ? verdict.prose.text : verdict.sentence}</p>
-      <Hint more="glossary" className="mt-2">
+      <div className="mt-4">
+        <p className="sr-only">{held} of {verdict.n_compare} comparable dimensions hold</p>
+        <p className="flex items-baseline gap-2" aria-hidden>
+          <span className="text-3xl font-semibold tabular-nums">{held}</span>
+          <span className="text-lg text-muted tabular-nums">/ {verdict.n_compare}</span>
+          <span className="text-sm text-muted">comparable dimensions hold</span>
+        </p>
+        <div className="mt-2 flex gap-1" aria-hidden>
+          {Array.from({ length: verdict.n_compare }, (_, i) => (
+            <span key={i} className={`h-1.5 flex-1 rounded ${i < held ? "bg-holds" : "bg-edge"}`} />
+          ))}
+        </div>
+      </div>
+      <p className="mt-4 flex-1 text-sm leading-relaxed">
+        {verdict.prose ? verdict.prose.text : verdict.sentence}
+      </p>
+      <Hint more="glossary" className="mt-4 border-t border-edge pt-3">
         Tier computed from the measurements below.{" "}
         {verdict.prose
           ? `Summary drafted by ${verdict.prose.model} from those measurements only, reviewed by the team.`
@@ -218,7 +233,10 @@ export function ReportCard({ data }: { data: TwinsResponse }) {
         </p>
       )}
 
-      {data.verdict && <VerdictBlock verdict={data.verdict} />}
+      <div className={`mt-3 grid items-stretch gap-4 ${data.verdict ? "md:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]" : ""}`}>
+        <MatchRadar rows={data.breakdown} world={world} />
+        {data.verdict && <VerdictBlock verdict={data.verdict} />}
+      </div>
 
       <SideBySide data={data} />
 

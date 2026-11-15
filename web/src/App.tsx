@@ -33,9 +33,12 @@ export default function App() {
           {NAV.map(([to, label]) => (
             <NavLink key={to} to={to} className={link}>{label}</NavLink>
           ))}
-          <span className="ml-2 rounded border border-edge px-1.5 py-0.5 text-xs text-muted">
-            {apiMode()}
-          </span>
+          {/* Which backend is answering: a developer's aid, not something visitors need. */}
+          {import.meta.env.DEV && (
+            <span className="ml-2 rounded border border-edge px-1.5 py-0.5 text-xs text-muted">
+              {apiMode()}
+            </span>
+          )}
         </nav>
       </header>
       <main className="p-4">

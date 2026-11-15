@@ -19,6 +19,10 @@ function hours(min: number | null | undefined): string {
   return min < 90 ? `${min} min` : `${Math.round(min / 60)} h`;
 }
 
+/** "Catamarca, Argentina · 26.50°S 67.70°W", or just the coordinates when unnamed. */
+const placeOf = (c: Candidate) =>
+  c.place ? `${c.place} · ${coords(c.lat, c.lon)}` : coords(c.lat, c.lon);
+
 function Row({ c, i, selected, onSelect }: {
   c: Candidate; i: number; selected: boolean; onSelect: () => void;
 }) {
@@ -26,14 +30,15 @@ function Row({ c, i, selected, onSelect }: {
     <li className={`rounded-lg border p-3 ${selected ? "border-holds bg-holds/5" : "border-edge bg-panel"}`}>
       <div className="grid grid-cols-[5rem_1fr] gap-3">
         <button type="button" onClick={onSelect} aria-label={`Show candidate ${i + 1} on the map`}>
-          <TileChip body="earth" tile={c} label={`Candidate at ${coords(c.lat, c.lon)}`} />
+          <TileChip body="earth" tile={c} label={`Candidate in ${placeOf(c)}`} />
         </button>
         <div className="min-w-0">
           <p className="flex flex-wrap items-baseline gap-2">
             <span className="text-xs text-muted">#{i + 1}</span>
-            <strong>{coords(c.lat, c.lon)}</strong>
+            <strong>{c.place ?? coords(c.lat, c.lon)}</strong>
             <span className="text-xs text-muted">model: {c.score_pct.toFixed(2)} percentile</span>
           </p>
+          {c.place && <p className="text-xs tabular-nums text-muted">{coords(c.lat, c.lon)}</p>}
           <p className="mt-1 text-sm text-muted">Why: {c.why.join(", ")}</p>
           <dl className="mt-1 flex flex-wrap gap-x-4 text-xs">
             <div><dt className="inline text-muted">slope </dt><dd className="inline tabular-nums">{c.slope_med ?? "—"}°</dd></div>
@@ -115,7 +120,7 @@ export function Discoveries() {
             body="earth"
             markers={list.map((c) => ({
               tile_id: c.tile_id, lat: c.lat, lon: c.lon, weight: c.score_pct / 100, isNew: true,
-              label: coords(c.lat, c.lon),
+              label: placeOf(c),
             }))}
             selected={selected}
             onSelect={setSelected}
