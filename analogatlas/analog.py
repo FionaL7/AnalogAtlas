@@ -160,22 +160,40 @@ def _albedo_closeness(earth_albedo, mars_albedo):
     return np.exp(-np.abs(np.asarray(earth_albedo, dtype=float) - float(mars_albedo)) / ALBEDO_SCALE)
 
 
+MARS_DRY_MM = 182.5      # Earth rainfall scale: 0.5 mm/day -> closeness 0.37, as in the portfolio
+# For an ice-rich Mars tile, frozen ground counts three times as much as any
+# other physical term: ice is what makes those sites what they are. At weight
+# 1 the ice sites' top analogs were still warm plains (1-6 frozen of 12); at 3
+# they are 7-10 of 12 with the same terrain-shape match (a judgement call,
+# for #40 to check).
+MARS_FROZEN_WEIGHT = 3.0
+
+
 def _physical(s_row: pd.Series, dst_meta: pd.DataFrame) -> np.ndarray:
     """Closeness of the like-for-like measurements, 0-1 per dst tile.
 
-    Slope and relief on every body. Mars adds albedo (TES vs MODIS), the one
-    extra quantity measured the same way on both worlds. Proxies (thermal
-    inertia, dust) are on the report card but stay out of the score.
+    Slope and relief on every body. Mars adds three more (#42):
+      albedo     TES vs MODIS, the same quantity measured on both worlds;
+      dryness    Mars has no liquid water, so Earth rainfall counts against a tile;
+      frozen     for an ice-rich Mars tile only: Earth ground that is frozen
+                 on average, the stand-in for buried ice (MARS_FROZEN_WEIGHT).
+    Without these the ice landing sites' top analogs were warm, wet plains,
+    because nothing in the score knew about water. Other proxies (thermal
+    inertia, dust) stay on the report card and out of the score. Moon tiles
+    are scored exactly as before.
     """
-    terms = [_closeness(dst_meta.slope_med.values, s_row.slope_med, 1.0),
-             _closeness(dst_meta.relief_km.values, s_row.relief_km, 1.0)]
+    terms = [(_closeness(dst_meta.slope_med.values, s_row.slope_med, 1.0), 1.0),
+             (_closeness(dst_meta.relief_km.values, s_row.relief_km, 1.0), 1.0)]
     if not is_mars(s_row):
-        return np.nan_to_num(np.mean(terms, axis=0), nan=0.0)
+        return np.nan_to_num(np.mean([t for t, _ in terms], axis=0), nan=0.0)
     if _has(s_row, "albedo"):
-        terms.append(_albedo_closeness(_col(dst_meta, "albedo"), s_row.albedo))
-    stack = np.vstack(terms)
-    seen = (~np.isnan(stack)).sum(axis=0)     # a missing value is skipped, not a zero
-    return np.where(seen > 0, np.nansum(stack, axis=0) / np.maximum(seen, 1), 0.0)
+        terms.append((_albedo_closeness(_col(dst_meta, "albedo"), s_row.albedo), 1.0))
+    terms.append((np.exp(-_col(dst_meta, "precip_mm") / MARS_DRY_MM), 1.0))
+    if mars_ice_rich(s_row):
+        terms.append((frozen_match(earth_mean_c(dst_meta)), MARS_FROZEN_WEIGHT))
+    values = np.vstack([t for t, _ in terms])
+    weights = np.array([w for _, w in terms])[:, None] * ~np.isnan(values)   # a missing value is skipped
+    return np.where(weights.sum(0) > 0, np.nansum(values * weights, 0) / np.maximum(weights.sum(0), 1e-9), 0.0)
 
 
 def cross_body_scores(src: BodyIndex, i: int, dst: BodyIndex, w_phys: float = 0.3

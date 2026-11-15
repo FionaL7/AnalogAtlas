@@ -96,7 +96,9 @@ def test_scoring_works_before_the_new_columns_exist():
     mars.meta = mars.meta.drop(columns=["albedo", "thermal_inertia", "dust_index", "weh_pct"])
     out = cross_body(mars, 0, _earth(full=False), k=4)
     assert len(out) == 4 and out.physical.notna().all()
-    assert out.physical.iloc[0] == pytest.approx(1.0)      # slope and relief are identical
+    # no albedo on either side: slope and relief (identical, 1.0) and dryness (rainfall has always been in the index) are what score
+    first = _earth(full=False).meta.set_index("tile_id").loc[out.tile_id.iloc[0]]
+    assert out.physical.iloc[0] == pytest.approx((2.0 + np.exp(-first.precip_mm / 182.5)) / 3)
 
 
 # ------------------------------------------------------------ report card ----
@@ -274,3 +276,47 @@ def test_dust_index_is_relative_dustiness():
     clear = _rows(_mars(dust_index=0.05), _earth(), "e_dusty")["Dust"]
     assert dusty["match"] > 0.9 > clear["match"]
     assert dusty["moon"].startswith("dust-covered") and clear["moon"].startswith("mostly dust-free")
+
+
+# ---------------------------------------------- dryness and frozen ground ----
+def test_a_wet_earth_tile_scores_lower_for_any_mars_tile():
+    """Mars has no liquid water, so rainfall now counts against a tile (#42)."""
+    earth = _earth()
+    earth.meta = earth.meta.copy()
+    earth.meta["precip_mm"] = [10.0, 10.0, 10.0, 10.0]
+    earth.meta.loc[1, "precip_mm"] = 2500.0           # e_dark_rock gets very wet
+    phys = dict(zip(earth.meta.tile_id, cross_body(_mars(), 0, earth, k=4).physical))
+    dry = dict(zip(earth.meta.tile_id, cross_body(_mars(), 0, _earth(), k=4).physical))
+    assert phys["e_dark_rock"] < dry["e_dark_rock"]
+    assert phys["e_dusty"] == pytest.approx(dry["e_dusty"])
+
+
+def test_frozen_ground_counts_only_for_an_ice_rich_mars_tile():
+    earth = _earth()
+    dry = {r.tile_id: r.physical for r in cross_body(_mars(lat=10.0), 0, earth, k=4).itertuples()}
+    icy = {r.tile_id: r.physical for r in cross_body(_mars(lat=48.0), 0, earth, k=4).itertuples()}
+    # e_glacier is frozen (-18 C mean) and e_dusty is warm (25 C)
+    assert icy["e_glacier"] - icy["e_dusty"] > dry["e_glacier"] - dry["e_dusty"] + 0.2
+    # a warm tile is unaffected by which kind of Mars tile asks
+    assert icy["e_dusty"] < dry["e_dusty"]
+
+
+def test_ice_site_top_analog_is_frozen_ground_not_a_warm_plain():
+    earth = _earth()
+    earth.meta = earth.meta.copy()
+    earth.meta["ice_frac"] = 0.0                       # so the push-down is not the reason
+    top = cross_body(_mars(lat=48.0), 0, earth, k=4, w_phys=1.0).tile_id.iloc[0]
+    assert top == "e_glacier"
+
+
+def test_moon_physical_score_is_still_just_slope_and_relief():
+    """The Mars terms must not leak into the Moon: its physical score is the
+    original mean of slope and relief closeness, with no rainfall or albedo."""
+    import analogatlas.analog as A
+    moon = pd.Series(dict(tile_id="m", lat=10.0, slope_med=2.0, relief_km=1.0))
+    earth = _earth()
+    earth.meta = earth.meta.copy()
+    earth.meta["precip_mm"] = 5000.0                   # would crush a Mars score
+    expected = np.mean([A._closeness(earth.meta.slope_med.values, 2.0, 1.0),
+                        A._closeness(earth.meta.relief_km.values, 1.0, 1.0)], axis=0)
+    assert np.allclose(A._physical(moon, earth.meta), expected)
