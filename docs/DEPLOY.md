@@ -1,70 +1,81 @@
 # Deploy
 
-The API runs on **Cloud Run** in project `analogatlas-ee`, region `us-central1` ([#21](https://github.com/FionaL7/AnalogAtlas/issues/21)). The frontend host is still to do.
+The API runs on **Cloud Run** in the Cloud project `$GCP_PROJECT` (Rishabh's account), region `us-central1`, service `analogatlas-api` ([#45](https://github.com/FionaL7/AnalogAtlas/issues/45)). The frontend host is still to do ([#21](https://github.com/FionaL7/AnalogAtlas/issues/21)).
+
+- The project id is in `.env` as `GCP_PROJECT`. Don't write it into the repo.
+- The API URL is on the Team log (#2).
 
 ## How it works
 
 - Push to `main` touching `api/`, `analogatlas/` or `deploy/api/` → Cloud Build trigger `deploy-api` runs [deploy/api/cloudbuild.yaml](../deploy/api/cloudbuild.yaml): build image → push → deploy.
 - The image bakes in CLIP and pulls the index and tiles from the GitHub Release `data` at build time. No keys in the repo.
-- **Scale to zero** (`--min-instances=0`): ~free while idle. The first request after ~15 min idle waits 10–30 s (cold start). The frontend pings `/health` on page load to start it early.
+- **Scale to zero** (`--min-instances=0`): ~free while idle. The first request after ~15 min idle waits up to ~30 s (cold start). The frontend pings `/health` on page load to start it early.
 - Only the 2 newest images are kept ([cleanup-policy.json](../deploy/api/cleanup-policy.json)), so storage stays ~$0.50/month.
 
-## Redeploy after new data
+## Who can deploy
 
-After `python scripts/data.py push index` (or tiles), rebuild so the image picks it up:
+Fiona and Rishabh both have the Editor role on the project. That is enough to run the commands below.
+
+## Deploy by hand
+
+Use after `python scripts/data.py push index` (or tiles), or while the trigger isn't set up. From a clean checkout of `main`:
 
 ```bash
-gcloud builds triggers run deploy-api --branch=main --region=us-central1
+gcloud config set project $GCP_PROJECT
+gcloud builds submit --config deploy/api/cloudbuild.yaml --region=us-central1 \
+  --service-account=projects/$GCP_PROJECT/serviceAccounts/deployer@$GCP_PROJECT.iam.gserviceaccount.com .
 ```
-Or: Console → Cloud Build → Triggers → `deploy-api` → Run.
 
-## One-time setup (Fiona)
+Once the trigger exists, this also works: `gcloud builds triggers run deploy-api --branch=main --region=us-central1`.
 
-1. **Billing**: link a billing account to `analogatlas-ee`. Then Billing → Budgets & alerts → budget of $5 with email alerts.
-2. **gcloud**:
+Check it:
+
+```bash
+URL=$(gcloud run services describe analogatlas-api --region=us-central1 --format='value(status.url)')
+curl $URL/health    # should list moon, moon_polar, earth
+```
+
+## One-time setup
+
+Done already (#45), kept here in case the project has to be rebuilt.
+
+1. **Billing**: link a billing account to the project. Then Billing → Budgets & alerts → a ~$5 budget with email alerts. The budget currency must match the billing account (ours is INR: ₹450).
+2. **gcloud**: install the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install), then:
    ```bash
-   brew install --cask google-cloud-sdk
    gcloud auth login
-   gcloud config set project analogatlas-ee
+   gcloud config set project $GCP_PROJECT
    ```
 3. **APIs, image repo, cleanup**:
    ```bash
    gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
    gcloud artifacts repositories create analogatlas --repository-format=docker --location=us-central1
    gcloud artifacts repositories set-cleanup-policies analogatlas --location=us-central1 \
-     --policy=deploy/api/cleanup-policy.json
+     --policy=deploy/api/cleanup-policy.json --no-dry-run
    ```
 4. **Deploy service account**:
    ```bash
-   SA=deployer@analogatlas-ee.iam.gserviceaccount.com
+   SA=deployer@$GCP_PROJECT.iam.gserviceaccount.com
    gcloud iam service-accounts create deployer --display-name="Cloud Build deployer"
-   for r in run.admin artifactregistry.writer logging.logWriter iam.serviceAccountUser; do
-     gcloud projects add-iam-policy-binding analogatlas-ee --member=serviceAccount:$SA --role=roles/$r
+   for r in run.admin artifactregistry.writer logging.logWriter iam.serviceAccountUser storage.objectViewer; do
+     gcloud projects add-iam-policy-binding $GCP_PROJECT --member=serviceAccount:$SA --role=roles/$r
    done
    ```
-5. **Trigger** (Console → Cloud Build → Triggers, region `us-central1`):
+   `storage.objectViewer` is only needed for `gcloud builds submit`: it reads the uploaded source.
+5. **Access for the team**:
+   ```bash
+   gcloud projects add-iam-policy-binding $GCP_PROJECT --member=user:<google email> --role=roles/editor
+   ```
+6. **Trigger** (Console → Cloud Build → Triggers, region `us-central1`). Connecting the repo needs the repo owner (Fiona) to approve the Cloud Build GitHub app.
    - Connect repository → GitHub → install the Cloud Build app on `FionaL7/AnalogAtlas`.
    - Create trigger: name `deploy-api`, event *Push to a branch*, branch `^main$`.
    - Included files filter: `api/**`, `analogatlas/**`, `deploy/api/**`.
    - Configuration: Cloud Build file, location `deploy/api/cloudbuild.yaml`.
-   - Service account: `deployer@analogatlas-ee.iam.gserviceaccount.com`.
-6. **First deploy**: click Run on the trigger. ~10–15 min. Then:
-   ```bash
-   URL=$(gcloud run services describe analogatlas-api --region=us-central1 --format='value(status.url)')
-   curl $URL/health    # should list moon, moon_polar, earth
-   ```
-   Post `$URL` on the Team log: the frontend build needs it as `VITE_API_BASE`.
-7. **Give Rishabh access** so deploys don't wait on one person:
-   ```bash
-   gcloud projects add-iam-policy-binding analogatlas-ee \
-     --member=user:<rishabh's google email> --role=roles/run.developer
-   gcloud projects add-iam-policy-binding analogatlas-ee \
-     --member=user:<rishabh's google email> --role=roles/cloudbuild.builds.editor
-   ```
+   - Service account: `deployer@<project id>.iam.gserviceaccount.com`.
 
 ## Gotchas
 
 - `$` starts a substitution in `cloudbuild.yaml`; shell variables must be `$$`.
+- `_IMAGE` uses `${PROJECT_ID}`, which only works with `dynamicSubstitutions: true` under `options:`. Without it the build fails with "repository name must be lowercase".
 - torch and torchvision must both come from the CPU index (see the Dockerfile).
 - uvicorn needs `--proxy-headers`, or `tile_url` comes back `http://` and HTTPS pages block it.
 - `moon_polar` tile images aren't on the `data` release yet, so `/tile/moon_polar/...` returns 404.
