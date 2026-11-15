@@ -140,7 +140,7 @@ We don't need to cover every dimension. The brief says an analog "does not have 
 - [x] Public GitHub repo with a README: what it is, how to run it, the data sources, and a section on AI use
 - [x] Deployed app (frontend and API) reachable without a login, at analogatlas.earth. **Redeploy pending** to pick up the 15 Nov data (Mars validation keys, retrained scores) — run the two #45 triggers
 - [ ] Short write-up: the method, the candidate sites, limitations and Earth's limits
-- [x] Accuracy evidence: the LOLA slope check, crater precision@k, known-analog ranking (Moon and Mars: median top 2.57%), hold-one-out model, trap rates, radar comparisons — all in `validation.json` and on the Methodology page
+- [x] Accuracy evidence: the LOLA slope check, crater precision@k, known-analog ranking (Moon and Mars; Mars median top 3.21% over 28 analogs), hold-one-out model, trap rates, radar comparisons — all in `validation.json` and on the Methodology page
 
 ### Before clicking submit
 

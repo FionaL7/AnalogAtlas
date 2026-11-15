@@ -218,3 +218,38 @@ def test_mars_trap_rate_is_a_fraction(validated_mars):
     t = validated_mars["mars_traps"]
     assert 0.0 <= t["trap_rate"] <= 1.0
     assert t["lookalikes_checked"] > 0
+
+
+# ------------------------------------------- is a channel gap more than noise?
+def test_a_clear_channel_win_is_recommended():
+    v = load_script().channel_verdict({
+        "shade_only": [10.0 + i * 0.1 for i in range(28)],
+        "look_only": [2.0 + i * 0.1 for i in range(28)],        # 8 points better on every analog
+    })
+    assert v["best"] == "look_only" and v["gap_ci95"][0] > 0
+    assert "consider changing analog.cross_body" in v["recommendation"]
+
+
+def test_a_small_noisy_gap_keeps_shade_only():
+    """The mixed channel has the lower median (so it is `best`), but by about a
+    point, on analogs whose paired differences swing by +-10: that is noise."""
+    shade = np.linspace(0.5, 30.0, 28)
+    swing = np.where(np.arange(28) % 2 == 0, 8.0, -10.0)        # paired differences, mean -1
+    v = load_script().channel_verdict({"shade_only": list(shade),
+                                       "mixed_0.6": list(np.clip(shade + swing, 0, None))})
+    assert v["best"] == "mixed_0.6"                              # the setup, not the claim
+    lo, hi = v["gap_ci95"]
+    assert lo <= 0 <= hi
+    assert v["recommendation"].startswith("keep the shipped shade-only")
+    assert "within noise" in v["recommendation"]
+
+
+def test_shade_only_best_needs_no_interval():
+    v = load_script().channel_verdict({"shade_only": [1.0, 2.0], "look_only": [5.0, 6.0]})
+    assert v == {"best": "shade_only", "gap_ci95": None,
+                 "recommendation": "keep the shipped shade-only visual channel for mars"}
+
+
+def test_the_verdict_is_reproducible():
+    per = {"shade_only": [3.0, 9.0, 1.0, 7.0, 2.0], "mixed_0.6": [2.0, 9.5, 0.5, 6.0, 2.5]}
+    assert load_script().channel_verdict(per) == load_script().channel_verdict(per)
