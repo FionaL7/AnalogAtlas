@@ -3,7 +3,7 @@
  * and crater retrieval plus known-analog ranking (#16). Any section whose key
  * is missing says so instead of showing placeholders. */
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { BarList } from "../components/BarList";
 import * as api from "../lib/api";
@@ -273,6 +273,14 @@ export function Methodology() {
   const known = validation?.known_analog_ranking;
   const polar = validation?.polar_analog_ranking;
 
+  // Hints elsewhere link to /methodology#<section> (#53). The router does not
+  // scroll to a hash, so do it here. The linked sections are static, above
+  // anything that loads, so their position is already final on mount.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
+  }, [hash]);
+
   return (
     <article className="mx-auto max-w-2xl text-sm leading-relaxed">
       <h1 className="text-xl font-semibold">How AnalogAtlas decides two places are alike</h1>
@@ -284,13 +292,40 @@ export function Methodology() {
         strongest new candidates then get a close study with radar surface roughness.
       </p>
 
-      <h2 className="mt-6 font-semibold">How a pair is scored</h2>
+      <h2 id="scoring" className="mt-6 scroll-mt-4 font-semibold">How a pair is scored</h2>
       <ul className="mt-2 list-disc pl-5 text-muted">
         <li><strong className="text-ink">Terrain</strong>: CLIP similarity of the two hillshades, averaged over four sun directions, shown as a percentile.</li>
         <li><strong className="text-ink">Physical</strong>: closeness of median slope and local relief, both measured at ~1.9 km per pixel.</li>
         <li><strong className="text-ink">Analog model</strong>: how much the Earth tile resembles known analog sites, from terrain, look, climate, vegetation and ice (#29).</li>
         <li><strong className="text-ink">Report card</strong>: every dimension compared on its own, grouped into holds, breaks down, and what Earth cannot reproduce.</li>
       </ul>
+
+      <h2 id="glossary" className="mt-6 scroll-mt-4 font-semibold">What the words on the page mean</h2>
+      <dl className="mt-2 grid gap-x-4 gap-y-2 text-muted sm:grid-cols-[10rem_1fr]">
+        <dt className="font-medium text-ink">Terrain %</dt>
+        <dd>How alike the two landscapes look in shape, as a percentile of all tiles. 99% means only 1% of tiles look more alike.</dd>
+        <dt className="font-medium text-ink">Physical %</dt>
+        <dd>How close the measured slope and relief are (plus albedo for Mars). 100% means the same values.</dd>
+        <dt className="font-medium text-ink">Model %</dt>
+        <dd>The analog model's percentile: how much the Earth tile resembles places already used as analogs.</dd>
+        <dt className="font-medium text-ink">Look ↔ Measurements</dt>
+        <dd>
+          How the ranking mixes the two. At 0 it ranks by look alone, like an image-only AI. At 1 it
+          ranks by measured slope and relief alone. The default, 0.3, is mostly look, with
+          measurements as a strong check, and pushes down tiles that fail the ice, plant or water
+          checks. Needs the live API; precomputed results use 0.3.
+        </dd>
+        <dt className="font-medium text-ink">New / known</dt>
+        <dd>“Known” tiles lie within 150 km of a site already used as an analog. “New” ones don't: those are the discoveries the challenge asks for.</dd>
+        <dt className="font-medium text-ink">Match</dt>
+        <dd>On the report card, how close one property is on the two bodies. 100% means the same value.</dd>
+        <dt className="font-medium text-ink">Holds / breaks down</dt>
+        <dd>A property holds at a match of 60% or more; below that, the analogy breaks down there.</dd>
+        <dt className="font-medium text-ink">Earth cannot reproduce</dt>
+        <dd>Gravity, atmosphere, radiation: no place on Earth matches them, so they are listed as limits, not scored.</dd>
+        <dt className="font-medium text-ink">Modelled / stand-in</dt>
+        <dd>A modelled value comes from a model, not a measurement. A stand-in compares two different measurements of the same property: read it as a guide.</dd>
+      </dl>
 
       <h2 className="mt-6 font-semibold">Why the comparison is fair</h2>
       <p className="mt-2 text-muted">
@@ -363,7 +398,7 @@ export function Methodology() {
         forests, wetlands, or simply far steeper. See the <Link to="/traps" className="text-holds underline">lookalike traps</Link>.
       </p>
 
-      <h2 className="mt-6 font-semibold">What the numbers are not</h2>
+      <h2 id="numbers" className="mt-6 scroll-mt-4 font-semibold">What the numbers are not</h2>
       <ul className="mt-2 list-disc pl-5 text-muted">
         <li>The ranking score mixes a standardised visual score with physical closeness. It is not a 0–1 similarity, so it is never shown.</li>
         <li>Lunar surface temperature extremes are modelled from latitude (or, at the pole, from shadow), not measured.</li>

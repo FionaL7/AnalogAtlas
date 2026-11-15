@@ -12,6 +12,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { TrapCard } from "../components/TrapCard";
 import { MapPane, type MapMarker } from "../components/map/MapPane";
+import { Hint } from "../components/Hint";
 import { AnalogList } from "../components/panels/AnalogList";
 import { ReportCard } from "../components/panels/ReportCard";
 import { SearchBox, type SearchInput } from "../components/panels/SearchBox";
@@ -297,28 +298,34 @@ export function Atlas() {
                 </optgroup>
               </select>
             </span>
-            <label className="flex items-center gap-2 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={newOnly}
-                onChange={(e) => update({ new: e.target.checked ? "1" : null })}
-              />
-              New candidates only
-            </label>
+            <span className="flex flex-col py-1">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={newOnly}
+                  onChange={(e) => update({ new: e.target.checked ? "1" : null })}
+                />
+                New candidates only
+              </label>
+              <Hint className="max-w-[12rem]">Hides sites already used as analogs.</Hint>
+            </span>
             <label className="flex flex-col gap-1 py-1 text-xs text-muted"
                    title={api.isLive() ? undefined : "Needs the API: the static export is precomputed at 0.3"}>
-              <span>Physical weight: <span className="tabular-nums text-ink">{wPhys.toFixed(1)}</span>
+              <span>Look ↔ Measurements: <span className="tabular-nums text-ink">{wPhys.toFixed(1)}</span>
                 {!api.isLive() && " (needs the API)"}</span>
               <input
                 type="range" min={0} max={1} step={0.1} value={wPhys}
                 disabled={!api.isLive()}
-                aria-label="Physical weight"
+                aria-label="Ranking weight: 0 ranks by look only, 1 by measured slope and relief only"
                 onChange={(e) => {
                   const v = Number(e.target.value);
                   update({ w: v === DEFAULT_W_PHYS ? null : String(v), tile: null });
                 }}
                 className="w-36 disabled:opacity-40"
               />
+              <Hint more="glossary" className="max-w-[12rem]">
+                0 = ranks by look only · 1 = by measured slope and relief only
+              </Hint>
             </label>
             {guideable && (
               <Link to={`/sites/${site.id}`} className="ml-auto self-center text-sm text-holds underline">
@@ -408,6 +415,12 @@ export function Atlas() {
               <div className="border-t border-edge px-4 py-2 text-xs uppercase tracking-wide text-muted">
                 {busy ? "Ranking…" : `${hits.length} candidates`}
                 {dstBody && !busy && ` on ${BODY_NAME[dstBody]}`}
+                {hits.length > 0 && (
+                  <Hint more="glossary" className="mt-1">
+                    Terrain: how alike the shapes look (percentile) · physical: slope and relief
+                    match · model: resemblance to known analog sites · new: not a known analog site
+                  </Hint>
+                )}
               </div>
               <AnalogList hits={hits} body={dstBody ?? "earth"} selected={tileId}
                           onSelect={(id) => update({ tile: id })} />

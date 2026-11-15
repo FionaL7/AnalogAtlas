@@ -12,6 +12,7 @@ import { GROUP_LABEL, coords, groupBreakdown, percent, type Group } from "../../
 import {
   BODY_NAME, WORLD_NAME, type BreakdownRow, type FieldTests, type Layer, type TwinsResponse,
 } from "../../lib/types";
+import { Hint } from "../Hint";
 import { TileChip } from "../TileChip";
 
 const GROUP_ORDER: Group[] = ["holds", "breaks", "cannot-reproduce", "no-equivalent"];
@@ -165,6 +166,10 @@ export function ReportCard({ data }: { data: TwinsResponse }) {
       <p className="mt-1 font-mono text-xs text-muted">
         {String(data.moon.tile_id)} ↔ {String(data.earth.tile_id)}
       </p>
+      <Hint more="glossary" className="mt-1">
+        Each row compares one property. Match: how close the two values are (100% = the same). At
+        60% or more the analogy holds; below that it breaks down.
+      </Hint>
       {data.climate === null && (
         <p className="mt-2 rounded border border-breaks/40 bg-breaks/10 px-2 py-1 text-xs text-breaks">
           Climate rows unavailable — NASA POWER did not answer. Everything else is unaffected.
