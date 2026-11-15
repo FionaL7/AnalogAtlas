@@ -233,3 +233,47 @@ export interface ValidationFile {
     skipped_sites?: Record<string, string>;
   };
 }
+
+/** Static export: portfolio/{site_id}.json (#31). The fewest Earth sites
+ * that together cover every dimension of one lunar target. */
+export interface PortfolioDimension {
+  id: string;
+  label: string;
+  note: string;
+  /** What this dimension is on the Moon side, in words ("-" if none). */
+  moon: string;
+  /** Score (0-1) a site needs to cover it. */
+  threshold: number;
+  /** Best score any eligible Earth tile reaches. */
+  earth_best: number | null;
+  /** No Earth site reaches the usual bar; the best Earth can do counts. */
+  earth_best_only: boolean;
+  /** tile_id of the site that first covered it; null if uncovered. */
+  covered_by: string | null;
+}
+
+export interface PortfolioSite {
+  order: number;
+  tile_id: string;
+  lat: number;
+  lon: number;
+  known_analog: string | null;
+  /** Every dimension this site covers. */
+  covers: string[];
+  /** The ones it was the first to cover. */
+  adds: string[];
+  scores: Record<string, number>;
+}
+
+export interface PortfolioFile {
+  site_id: string;
+  site_name: string;
+  body: Body;
+  src_tile: { tile_id: string; lat: number; lon: number };
+  polar: boolean;
+  dimensions: PortfolioDimension[];
+  sites: PortfolioSite[];
+  uncovered: string[];
+  best_single_site: { tile_id: string; covers: number } | null;
+  candidates: number;
+}

@@ -6,12 +6,13 @@ import { Link, useParams } from "react-router-dom";
 
 import { TileChip } from "../components/TileChip";
 import { TrapCard } from "../components/TrapCard";
+import { Portfolio } from "../components/panels/Portfolio";
 import { FieldTestList } from "../components/panels/ReportCard";
 import * as api from "../lib/api";
 import type { TileLike } from "../lib/chips";
 import { coords, groupBreakdown, percent } from "../lib/format";
 import { loadGuide, type Guide } from "../lib/guide";
-import type { Site } from "../lib/types";
+import type { PortfolioFile, Site } from "../lib/types";
 
 function Fact({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
@@ -114,13 +115,18 @@ export function SiteGuide() {
   const { id } = useParams();
   const [site, setSite] = useState<Site | null | undefined>(undefined);
   const [guide, setGuide] = useState<Guide | null>(null);
+  const [portfolio, setPortfolio] = useState<PortfolioFile | null>(null);
 
   useEffect(() => {
     setGuide(null);
+    setPortfolio(null);
     api.sites().then((all) => {
       const s = all.find((x) => x.id === id) ?? null;
       setSite(s);
-      if (s) loadGuide(s).then(setGuide);
+      if (s) {
+        loadGuide(s).then(setGuide);
+        api.portfolio(s.id).then(setPortfolio);
+      }
     });
   }, [id]);
 
@@ -180,6 +186,13 @@ export function SiteGuide() {
               {guide ? <Candidates guide={guide} /> : <p className="text-sm text-muted">Loading…</p>}
             </div>
           </section>
+
+          {portfolio && portfolio.sites.length > 0 && (
+            <section>
+              <h2 className="text-sm uppercase tracking-wide text-muted">Smallest set of Earth sites</h2>
+              <div className="mt-3"><Portfolio data={portfolio} siteName={site.name} /></div>
+            </section>
+          )}
 
           {guide && guide.traps.length > 0 && (
             <section>

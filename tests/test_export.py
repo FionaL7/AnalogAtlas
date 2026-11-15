@@ -232,3 +232,14 @@ def test_candidates_and_radar_are_exported_when_present(index_dir, tmp_path, mon
     radar = read(out / "radar.json")
     assert set(radar) == {"haworth"}          # keyed by site id; unknown names dropped
     assert radar["haworth"]["cpr_median"] == 0.4989
+
+
+def test_portfolios_are_exported_for_lunar_targets(exported):
+    """#31: one portfolio per in-index lunar target, none for Earth sites."""
+    files = {p.stem: read(p) for p in (exported / "portfolio").glob("*.json")}
+    sites = read(exported / "sites.json")
+    lunar = {s["id"] for s in sites if s["body"] != "earth" and s["in_index"]}
+    assert set(files) == lunar and len(files) >= 3
+    for p in files.values():
+        assert {d["id"] for d in p["dimensions"]} >= {"shape", "slope", "access"}
+        assert p["sites"] and all(s["covers"] for s in p["sites"])
